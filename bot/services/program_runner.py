@@ -105,8 +105,18 @@ async def run_program_pipeline(
         # Extract data according to the prompt schema
         identification = qualification_result.get("identification", {})
         outreach_details = qualification_result.get("outreach", {})
-        pains = qualification_result.get("identified_pains", [])
+        pains_raw = qualification_result.get("identified_pains", [])
         product_idea = qualification_result.get("product_idea", {})
+
+        # Handle pains - can be list of strings or list of dicts
+        pains = []
+        for pain in pains_raw:
+            if isinstance(pain, str):
+                pains.append(pain)
+            elif isinstance(pain, dict):
+                # Extract pain text from dict (try common keys)
+                pain_text = pain.get("pain") or pain.get("text") or pain.get("description") or str(pain)
+                pains.append(pain_text)
 
         pains_summary = "\n• ".join(pains) if pains else None
         if pains_summary:

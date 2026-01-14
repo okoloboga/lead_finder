@@ -1,13 +1,24 @@
 import asyncio
+import random
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.types import Channel, User
+from telethon.errors import FloodWaitError
 import re
 import logging
 import config
 from modules.telegram_client import TelegramAuthManager
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
+
+async def _random_delay(delay_type: str) -> None:
+    """Apply randomized delay based on safety mode."""
+    min_delay, max_delay = config.get_delay(delay_type)
+    delay = random.uniform(min_delay, max_delay)
+    await asyncio.sleep(delay)
 
 async def _get_entity_details(client, entity):
     """Gathers details for a given Telegram entity (Channel or User)."""
@@ -65,31 +76,58 @@ def _extract_contact_info(details: dict):
 async def enrich_with_telegram_data(entity_identifier: str) -> dict | None:
     """
     Enrichment function. Parses a Telegram entity (user or channel).
+
+    Uses configured safety delays and proper FloodWaitError handling.
     """
     client = await TelegramAuthManager.get_client()
-    max_retries = 3
+    max_retries = config.MAX_FLOODWAIT_RETRIES + 1
+
     for attempt in range(max_retries):
         try:
-            logger.debug(f"Enriching '{entity_identifier}' with Telegram data (Attempt {attempt + 1})...")
+            logger.debug(
+                f"Enriching '{entity_identifier}' with Telegram data "
+                f"(Attempt {attempt + 1})..."
+            )
             entity = await client.get_entity(entity_identifier)
+
+            # Apply delay before getting details
+            await _random_delay("between_channel_parse")
             details = await _get_entity_details(client, entity)
             if not details:
                 logger.warning(f"Could not get details for '{entity_identifier}'.")
                 return None
 
+            # Apply delay before getting posts
+            await _random_delay("between_posts_fetch")
             posts = await _get_entity_posts(client, entity, config.POSTS_TO_FETCH)
             contact_info = _extract_contact_info(details)
 
-            return {"entity_data": details, "recent_posts": posts, "contact_info": contact_info}
+            return {
+                "entity_data": details,
+                "recent_posts": posts,
+                "contact_info": contact_info
+            }
         except (ValueError, TypeError) as e:
-            logger.error(f"Cannot find entity for enrichment '{entity_identifier}'. Error: {e}")
+            logger.error(
+                f"Cannot find entity for enrichment '{entity_identifier}'. "
+                f"Error: {e}"
+            )
             return None
-        except Exception as e:
-            if "FloodWaitError" in str(e) and attempt < max_retries - 1:
-                wait_time = 2 ** (attempt + 1)
-                logger.warning(f"Rate limit hit for '{entity_identifier}'. Waiting {wait_time}s.")
+        except FloodWaitError as e:
+            if attempt < max_retries - 1:
+                wait_time = e.seconds + config.FLOODWAIT_EXTRA_SECONDS
+                logger.warning(
+                    f"FloodWait for '{entity_identifier}'. "
+                    f"Waiting {wait_time}s (attempt {attempt + 1}/{max_retries})."
+                )
                 await asyncio.sleep(wait_time)
             else:
-                logger.error(f"Failed to enrich '{entity_identifier}': {e}")
+                logger.error(
+                    f"Max retries exceeded for '{entity_identifier}' "
+                    f"due to FloodWait."
+                )
                 return None
+        except Exception as e:
+            logger.error(f"Failed to enrich '{entity_identifier}': {e}")
+            return None
     return None
