@@ -80,20 +80,20 @@ def _format_messages_with_links(messages: List[Dict[str, Any]]) -> str:
 
 def format_lead_as_markdown(lead: dict, lead_index: int) -> str:
     """Formats a single lead into a markdown string with message links."""
-    qual_result = lead.get("qualification_result", {})
-    qual = qual_result.get("qualification", {})
-    identification = qual_result.get("identification", {})
-    pains = qual_result.get("identified_pains", [])
-    idea = qual_result.get("product_idea", {})
-    outreach = qual_result.get("outreach", {})
-    contact = lead.get("contact", {})
-    enrichment = lead.get("enrichment_data", {})
-    channel_entity_data = enrichment.get("channel_data", {}).get("entity_data", {})
+    qual_result = lead.get("qualification_result") or {}
+    qual = qual_result.get("qualification") or {}
+    identification = qual_result.get("identification") or {}
+    pains = qual_result.get("identified_pains") or []
+    idea = qual_result.get("product_idea") or {}
+    outreach = qual_result.get("outreach") or {}
+    contact = lead.get("contact") or {}
+    enrichment = lead.get("enrichment_data") or {}
+    channel_entity_data = (enrichment.get("channel_data") or {}).get("entity_data") or {}
 
     # Get message metadata
     messages = lead.get("messages_with_links", [])
     has_fresh = lead.get("has_fresh_message", False)
-    freshness_summary = qual_result.get("freshness_summary", {})
+    freshness_summary = qual_result.get("freshness_summary") or {}
 
     # Score info (0-5 scale)
     score = qual.get('score', 'N/A')
@@ -218,8 +218,8 @@ def append_to_markdown(lead: dict, lead_index: int, filepath: str) -> None:
 
 def format_lead_summary(lead: dict) -> str:
     """Format a short summary of the lead for console output."""
-    contact = lead.get("contact", {})
-    qual = lead.get("qualification_result", {}).get("qualification", {})
+    contact = lead.get("contact") or {}
+    qual = (lead.get("qualification_result") or {}).get("qualification") or {}
     score = qual.get("score", "?")
     has_fresh = lead.get("has_fresh_message", False)
 

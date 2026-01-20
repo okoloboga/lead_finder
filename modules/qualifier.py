@@ -99,7 +99,7 @@ def format_enrichment_data_for_prompt(
             prompt_text += "\n"
 
     if enrichment_data.get("channel_data"):
-        ch_data = enrichment_data["channel_data"].get("entity_data", {})
+        ch_data = (enrichment_data["channel_data"] or {}).get("entity_data") or {}
         prompt_text += "--- Данные с личного Telegram-канала ---\n"
         prompt_text += f"Название: {ch_data.get('title', 'N/A')}\n"
         prompt_text += f"Подписчиков: {ch_data.get('participants_count', 'N/A')}\n"
@@ -224,7 +224,7 @@ def qualify_lead(
         freshness_summary = get_freshness_summary(candidate_data)
 
         # Get score from LLM
-        qualification = parsed_response.get("qualification", {})
+        qualification = parsed_response.get("qualification") or {}
         if isinstance(qualification, dict):
             llm_score = qualification.get("score", 0)
         else:

@@ -16,9 +16,9 @@ def format_lead_card(lead: Lead, index: int, total: int) -> str:
 
     # Extract additional details from raw_qualification_data
     raw_data = lead.raw_qualification_data or {}
-    identification = raw_data.get("identification", {})
-    qualification = raw_data.get("qualification", {})
-    product_idea = raw_data.get("product_idea", {})
+    identification = raw_data.get("identification") or {}
+    qualification = raw_data.get("qualification") or {}
+    product_idea = raw_data.get("product_idea") or {}
 
     # Build the card
     card = (

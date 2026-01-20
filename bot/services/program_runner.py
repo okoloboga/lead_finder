@@ -85,13 +85,13 @@ async def run_program_pipeline(
             logger.error(f"Qualification error for @{candidate['username']}: {qualification_result_data['error']}")
             continue
         
-        qualification_result = qualification_result_data.get("llm_response", {})
+        qualification_result = qualification_result_data.get("llm_response") or {}
         raw_llm_input = qualification_result_data.get("raw_input_prompt")
 
         # DEBUG: Log the full LLM response to see its structure
         logger.info(f"LLM Response for @{candidate['username']}: {qualification_result}")
 
-        qual_details = qualification_result.get("qualification", {})
+        qual_details = qualification_result.get("qualification") or {}
         score = qual_details.get("score", 0) if isinstance(qual_details, dict) else 0
             
         if score < program.min_score:
@@ -105,10 +105,10 @@ async def run_program_pipeline(
         lead = (await session.execute(existing_lead_query)).scalars().first()
 
         # Extract data according to the prompt schema
-        identification = qualification_result.get("identification", {})
-        outreach_details = qualification_result.get("outreach", {})
-        pains_raw = qualification_result.get("identified_pains", [])
-        product_idea = qualification_result.get("product_idea", {})
+        identification = qualification_result.get("identification") or {}
+        outreach_details = qualification_result.get("outreach") or {}
+        pains_raw = qualification_result.get("identified_pains") or []
+        product_idea = qualification_result.get("product_idea") or {}
 
         # Handle pains - can be list of strings or list of dicts
         pains = []
