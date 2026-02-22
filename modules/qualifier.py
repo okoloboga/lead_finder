@@ -156,7 +156,8 @@ def get_freshness_summary(candidate_data: dict) -> Dict[str, Any]:
 def qualify_lead(
     candidate_data: dict,
     enrichment_data: dict,
-    niche: str
+    niche: str,
+    ai_ideas: str = "",
 ) -> dict:
     """
     Qualifies a lead using the pre-initialized LLM.
@@ -182,6 +183,8 @@ def qualify_lead(
         f"{candidate_data.get('messages_in_chat', 'N/A')}\n\n"
     )
     input_data += format_enrichment_data_for_prompt(enrichment_data, candidate_data)
+    if ai_ideas:
+        input_data += ai_ideas
 
     system_message = SystemMessage(
         content=(

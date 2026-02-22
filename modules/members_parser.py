@@ -151,7 +151,7 @@ async def parse_users_from_messages(
     max_messages_per_user: int = 5,
     progress_callback: Optional[callable] = None,
     use_batch_analysis: bool = True
-) -> list[dict]:
+) -> tuple[list[dict], list[dict]]:
     """
     Parses active users by reading the message history of a chat.
 
@@ -171,7 +171,9 @@ async def parse_users_from_messages(
         use_batch_analysis: Use batch LLM analysis to pre-filter candidates
 
     Returns:
-        List of candidate dictionaries with message metadata and batch_analysis_data
+        Tuple of (candidates, all_messages):
+        - candidates: list of candidate dicts with message metadata and batch_analysis_data
+        - all_messages: list of ALL text messages (for pain analysis), regardless of sender
     """
     if not await TelegramAuthManager.is_authorized():
         logger.warning(
@@ -202,7 +204,7 @@ async def parse_users_from_messages(
 
         if entity is None:
             logger.error(f"Could not get entity for {chat_identifier}")
-            return []
+            return [], []
 
         logger.info(
             f"Successfully got entity for '{chat_identifier}'. "
@@ -221,6 +223,7 @@ async def parse_users_from_messages(
 
         # Store user objects, message count, and detailed message data
         unique_users: dict[int, dict] = {}
+        all_messages: list[dict] = []  # All text messages for pain analysis
         messages_processed = 0
 
         logger.info(f"Fetching last {messages_limit} messages...")
@@ -256,6 +259,20 @@ async def parse_users_from_messages(
                 # Apply delay every N messages to avoid rate limits
                 if messages_processed % 50 == 0:
                     await _random_delay("between_requests")
+
+                # Collect ALL text messages for pain analysis (before sender filtering)
+                if message.text:
+                    all_messages.append({
+                        "message_id": message.id,
+                        "text": message.text,
+                        "date": message.date.isoformat() if message.date else None,
+                        "chat_username": chat_username,
+                        "chat_id": chat_id,
+                        "is_public": is_public,
+                        "link": generate_message_link(
+                            chat_username, chat_id, message.id, is_public
+                        ),
+                    })
 
                 # Get sender
                 try:
@@ -494,13 +511,14 @@ async def parse_users_from_messages(
             logger.info(
                 f"Found {len(candidate_list)} potential leads from message history."
             )
-        return candidate_list
+        logger.info(f"Collected {len(all_messages)} total text messages for pain analysis.")
+        return candidate_list, all_messages
 
     except ParsingPausedError:
         raise  # Re-raise to be handled by caller
     except Exception as e:
         logger.error(f"Failed to parse messages from {chat_identifier}: {e}")
-        return []
+        return [], []
 
 
 async def main():
@@ -509,10 +527,11 @@ async def main():
     logger.info(f"--- Testing Message Parser on chat: {test_chat} ---")
 
     try:
-        candidates = await parse_users_from_messages(
+        candidates, all_messages = await parse_users_from_messages(
             test_chat, only_with_channels=False, messages_limit=100
         )
 
+        print(f"\n--- Collected {len(all_messages)} total text messages ---")
         if candidates:
             print(f"\n--- Found {len(candidates)} active users ---")
             candidates.sort(key=lambda x: x['messages_in_chat'], reverse=True)

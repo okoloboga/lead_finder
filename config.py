@@ -82,6 +82,13 @@ MESSAGE_FRESHNESS_DAYS = {
 }
 
 
+#
+# Pain Collection Settings
+#
+PAIN_COLLECTION_ENABLED = os.getenv("PAIN_COLLECTION_ENABLED", "true").lower() == "true"
+PAIN_BATCH_SIZE = int(os.getenv("PAIN_BATCH_SIZE", 25))
+
+
 DEFAULT_CONFIG = {
     "search": {
         "queries_per_niche": 5,

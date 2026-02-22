@@ -1,0 +1,392 @@
+"""Handlers for the Pains & Content UI section."""
+import logging
+from datetime import datetime, timezone
+
+from aiogram import Router, F
+from aiogram.types import CallbackQuery
+from sqlalchemy import select, func, delete
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from bot.models.pain import Pain, PainCluster, GeneratedPost
+from bot.ui.main_menu import get_main_menu_keyboard, MAIN_MENU_TEXT
+from bot.ui.pains_menu import (
+    cluster_score,
+    format_pains_summary,
+    format_top_pains,
+    format_cluster_detail,
+    format_quotes_page,
+    format_draft,
+    get_pains_menu_keyboard,
+    get_top_pains_keyboard,
+    get_cluster_keyboard,
+    get_post_type_keyboard,
+    get_draft_keyboard,
+    get_drafts_list_keyboard,
+    get_quotes_keyboard,
+)
+
+logger = logging.getLogger(__name__)
+router = Router()
+
+_QUOTES_PAGE_SIZE = 5
+_DRAFTS_PAGE_SIZE = 5
+
+
+# --- Helper ---
+
+async def _get_program_id_for_user(user_id: int, session: AsyncSession) -> int | None:
+    """Return the first program owned by this user, or None."""
+    from bot.models.program import Program
+    result = await session.execute(
+        select(Program.id).where(Program.owner_chat_id == user_id).limit(1)
+    )
+    row = result.first()
+    return row[0] if row else None
+
+
+# --- Main Pains Menu ---
+
+@router.callback_query(F.data == "pains_menu")
+async def pains_menu_handler(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Display the Pains & Content main screen with aggregate stats."""
+    program_id = await _get_program_id_for_user(callback.from_user.id, session)
+
+    if program_id is None:
+        await callback.message.edit_text(
+            "У вас нет программ. Создайте программу, чтобы начать сбор болей.",
+            reply_markup=get_main_menu_keyboard(),
+        )
+        await callback.answer()
+        return
+
+    total_pains = (
+        await session.execute(
+            select(func.count(Pain.id)).where(Pain.program_id == program_id)
+        )
+    ).scalar_one()
+
+    total_clusters = (
+        await session.execute(
+            select(func.count(PainCluster.id)).where(
+                PainCluster.program_id == program_id
+            )
+        )
+    ).scalar_one()
+
+    total_posts = (
+        await session.execute(
+            select(func.count(GeneratedPost.id))
+            .join(PainCluster, GeneratedPost.cluster_id == PainCluster.id)
+            .where(PainCluster.program_id == program_id)
+        )
+    ).scalar_one()
+
+    text = format_pains_summary(total_pains, total_clusters, total_posts)
+    await callback.message.edit_text(text, reply_markup=get_pains_menu_keyboard())
+    await callback.answer()
+
+
+# --- Top Pains ---
+
+@router.callback_query(F.data == "top_pains")
+async def top_pains_handler(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Show top-5 clusters ranked by score formula."""
+    program_id = await _get_program_id_for_user(callback.from_user.id, session)
+
+    clusters_result = await session.execute(
+        select(PainCluster).where(PainCluster.program_id == program_id)
+    )
+    clusters = clusters_result.scalars().all()
+    ranked = sorted(clusters, key=cluster_score, reverse=True)[:5]
+
+    text = format_top_pains(ranked)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_top_pains_keyboard(ranked),
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+# --- Cluster Detail ---
+
+@router.callback_query(F.data.startswith("cluster_detail_"))
+async def cluster_detail_handler(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Show detail view of a single pain cluster with sample quotes."""
+    cluster_id = int(callback.data.split("_")[-1])
+
+    cluster = await session.get(PainCluster, cluster_id)
+    if not cluster:
+        await callback.answer("Кластер не найден.", show_alert=True)
+        return
+
+    sample_pains_result = await session.execute(
+        select(Pain).where(Pain.cluster_id == cluster_id).limit(3)
+    )
+    sample_pains = sample_pains_result.scalars().all()
+
+    text = format_cluster_detail(cluster, sample_pains)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_cluster_keyboard(cluster_id),
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+# --- All Quotes (paginated) ---
+
+@router.callback_query(F.data.startswith("cluster_quotes_"))
+async def cluster_quotes_handler(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Paginated view of all quotes in a cluster."""
+    parts = callback.data.split("_")
+    cluster_id = int(parts[2])
+    page = int(parts[3]) if len(parts) > 3 else 0
+
+    cluster = await session.get(PainCluster, cluster_id)
+    if not cluster:
+        await callback.answer("Кластер не найден.", show_alert=True)
+        return
+
+    pains_result = await session.execute(
+        select(Pain).where(Pain.cluster_id == cluster_id)
+    )
+    pains = pains_result.scalars().all()
+
+    if not pains:
+        await callback.answer("Нет цитат для этого кластера.", show_alert=True)
+        return
+
+    total_pages = (len(pains) + _QUOTES_PAGE_SIZE - 1) // _QUOTES_PAGE_SIZE
+    page = max(0, min(page, total_pages - 1))
+
+    text = format_quotes_page(cluster, pains, page, _QUOTES_PAGE_SIZE)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_quotes_keyboard(cluster_id, page, total_pages),
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+# --- Generate Post — Select Type ---
+
+@router.callback_query(F.data == "generate_post_menu")
+async def generate_post_menu_handler(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Show the top clusters for post generation selection."""
+    program_id = await _get_program_id_for_user(callback.from_user.id, session)
+
+    clusters_result = await session.execute(
+        select(PainCluster).where(PainCluster.program_id == program_id)
+    )
+    clusters = clusters_result.scalars().all()
+    ranked = sorted(clusters, key=cluster_score, reverse=True)[:5]
+
+    if not ranked:
+        await callback.message.edit_text(
+            "Нет кластеров для генерации поста. Запустите программу сначала.",
+            reply_markup=get_pains_menu_keyboard(),
+        )
+        await callback.answer()
+        return
+
+    text = "✍️ Выберите кластер для генерации поста:\n\n" + format_top_pains(ranked)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_top_pains_keyboard(ranked),
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("generate_post_"))
+async def generate_post_choose_type(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Show post type selection for a specific cluster."""
+    cluster_id = int(callback.data.split("_")[-1])
+    cluster = await session.get(PainCluster, cluster_id)
+    if not cluster:
+        await callback.answer("Кластер не найден.", show_alert=True)
+        return
+
+    text = (
+        f"✍️ Генерация поста\n\n"
+        f"Кластер: {cluster.name}\n"
+        f"Упоминаний: {cluster.pain_count}\n\n"
+        "Выберите тип поста:"
+    )
+    await callback.message.edit_text(
+        text, reply_markup=get_post_type_keyboard(cluster_id)
+    )
+    await callback.answer()
+
+
+# --- Generate Post — Execute ---
+
+@router.callback_query(F.data.regexp(r"^gen_(scenario|insight|breakdown)_\d+$"))
+async def generate_post_execute(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Generate a post draft for the selected cluster and type."""
+    parts = callback.data.split("_")
+    post_type = parts[1]
+    cluster_id = int(parts[2])
+
+    cluster = await session.get(PainCluster, cluster_id)
+    if not cluster:
+        await callback.answer("Кластер не найден.", show_alert=True)
+        return
+
+    await callback.message.edit_text("⏳ Генерирую черновик поста...")
+
+    from modules.content_generator import generate_post
+
+    try:
+        post = await generate_post(cluster_id, post_type, session)
+    except Exception as e:
+        logger.error(f"Content generation failed for cluster_id={cluster_id}: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при генерации поста. Попробуйте позже.",
+            reply_markup=get_cluster_keyboard(cluster_id),
+        )
+        await callback.answer()
+        return
+
+    text = format_draft(post, cluster.name)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_draft_keyboard(post.id, cluster_id),
+        parse_mode="HTML",
+    )
+    await callback.answer("✅ Черновик готов!")
+
+
+# --- My Drafts ---
+
+@router.callback_query(F.data.startswith("my_drafts"))
+async def my_drafts_handler(callback: CallbackQuery, session: AsyncSession) -> None:
+    """List all draft posts with pagination."""
+    parts = callback.data.split("_")
+    page = int(parts[2]) if len(parts) > 2 else 0
+
+    program_id = await _get_program_id_for_user(callback.from_user.id, session)
+
+    posts_result = await session.execute(
+        select(GeneratedPost)
+        .join(PainCluster, GeneratedPost.cluster_id == PainCluster.id)
+        .where(PainCluster.program_id == program_id)
+        .order_by(GeneratedPost.generated_at.desc())
+    )
+    posts = posts_result.scalars().all()
+
+    if not posts:
+        await callback.message.edit_text(
+            "📝 Черновики\n\nПока нет черновиков. Сгенерируйте первый пост!",
+            reply_markup=get_pains_menu_keyboard(),
+        )
+        await callback.answer()
+        return
+
+    total = len(posts)
+    total_pages = (total + _DRAFTS_PAGE_SIZE - 1) // _DRAFTS_PAGE_SIZE
+    page = max(0, min(page, total_pages - 1))
+
+    text = f"📝 Черновики ({total} шт.)\n\nВыберите черновик для просмотра:"
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_drafts_list_keyboard(posts, page, _DRAFTS_PAGE_SIZE),
+    )
+    await callback.answer()
+
+
+# --- View Single Draft ---
+
+@router.callback_query(F.data.startswith("view_draft_"))
+async def view_draft_handler(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Show full text of a draft post."""
+    post_id = int(callback.data.split("_")[-1])
+
+    post = await session.get(GeneratedPost, post_id)
+    if not post:
+        await callback.answer("Черновик не найден.", show_alert=True)
+        return
+
+    cluster = await session.get(PainCluster, post.cluster_id)
+    cluster_name = cluster.name if cluster else "Неизвестный кластер"
+
+    text = format_draft(post, cluster_name)
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_draft_keyboard(post.id, post.cluster_id),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+# --- Draft Actions ---
+
+@router.callback_query(F.data.startswith("mark_published_"))
+async def mark_published_handler(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Mark a draft post as published."""
+    post_id = int(callback.data.split("_")[-1])
+    post = await session.get(GeneratedPost, post_id)
+    if not post:
+        await callback.answer("Черновик не найден.", show_alert=True)
+        return
+
+    post.status = "published"
+    post.published_at = datetime.now(timezone.utc)
+    await session.commit()
+    await callback.answer("✅ Отмечено как опубликованное!")
+
+    cluster = await session.get(PainCluster, post.cluster_id)
+    cluster_name = cluster.name if cluster else "Неизвестный кластер"
+    await callback.message.edit_text(
+        format_draft(post, cluster_name),
+        reply_markup=get_draft_keyboard(post.id, post.cluster_id),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data.startswith("regen_post_"))
+async def regen_post_handler(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Show post type selection to regenerate for a cluster."""
+    cluster_id = int(callback.data.split("_")[-1])
+    cluster = await session.get(PainCluster, cluster_id)
+    if not cluster:
+        await callback.answer("Кластер не найден.", show_alert=True)
+        return
+
+    text = (
+        f"🔄 Перегенерация поста\n\n"
+        f"Кластер: {cluster.name}\n\n"
+        "Выберите тип поста:"
+    )
+    await callback.message.edit_text(
+        text, reply_markup=get_post_type_keyboard(cluster_id)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("delete_draft_"))
+async def delete_draft_handler(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Delete a draft post."""
+    post_id = int(callback.data.split("_")[-1])
+    await session.execute(delete(GeneratedPost).where(GeneratedPost.id == post_id))
+    await session.commit()
+    await callback.answer("🗑 Черновик удалён.")
+    await my_drafts_handler(callback, session)
+
+
+# --- Main Menu shortcut ---
+
+@router.callback_query(F.data == "main_menu")
+async def main_menu_shortcut(callback: CallbackQuery) -> None:
+    """Return to main menu."""
+    await callback.message.edit_text(
+        MAIN_MENU_TEXT, reply_markup=get_main_menu_keyboard()
+    )
+    await callback.answer()

@@ -52,6 +52,27 @@ def enrich_with_web_search(candidate: Dict[str, Any]) -> Dict[str, Any]:
             
     return web_search_results
 
+def search_ai_ideas_for_niche(niche: str) -> str:
+    """Searches for fresh AI integration ideas relevant to the given niche.
+
+    Runs a single Google search query and returns a formatted string
+    suitable for injection into the qualification prompt.
+    """
+    query = f"AI автоматизация интеграция для бизнеса {niche} 2025"
+    items = _perform_google_search(query, num_results=5)
+    if not items:
+        return ""
+
+    lines = ["--- Актуальные AI-решения для ниши (из сети) ---"]
+    for item in items:
+        title = item.get("title", "").strip()
+        snippet = item.get("snippet", "").strip()
+        if title:
+            lines.append(f"- {title}: {snippet}" if snippet else f"- {title}")
+
+    return "\n".join(lines) + "\n\n"
+
+
 # --- Legacy v1 functions ---
 
 def _generate_v1_search_queries(niche: str) -> list[str]:

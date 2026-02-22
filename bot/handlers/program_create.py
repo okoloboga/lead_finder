@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.states import ProgramCreate
 from bot.ui.main_menu import MAIN_MENU_TEXT, get_main_menu_keyboard
 from bot.models.program import Program, ProgramChat
+from bot.scheduler import schedule_program_job
 
 router = Router()
 
@@ -165,21 +166,23 @@ async def back_to_chats(callback: CallbackQuery, state: FSMContext):
 async def save_program(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
     data = await state.get_data()
     logging.info(f"Saving new program with data: {data}")
-    
-    # Create Program object
+
+    owner_chat_id = callback.from_user.id
     new_program = Program(
         name=data['name'],
-        niche_description=data['niche_description']
-        # Default settings are used from the model
+        niche_description=data['niche_description'],
+        owner_chat_id=owner_chat_id,
     )
-    
-    # Create ProgramChat objects
+
     for chat_username in data.get('chats', []):
         new_program.chats.append(ProgramChat(chat_username=chat_username))
-        
+
     session.add(new_program)
     await session.commit()
-    
+    await session.refresh(new_program)
+
+    schedule_program_job(new_program.id, owner_chat_id, new_program.schedule_time)
+
     await state.clear()
     logging.info(f"Successfully saved new program with id={new_program.id}")
     

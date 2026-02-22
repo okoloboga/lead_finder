@@ -1,5 +1,6 @@
 import datetime
 from sqlalchemy import (
+    BigInteger,
     Integer,
     String,
     DateTime,
@@ -24,8 +25,11 @@ class Program(Base):
     enrich: Mapped[bool] = mapped_column(Boolean, default=False)
     
     # Schedule
-    schedule_time: Mapped[str] = mapped_column(String(5), default="09:00") # HH:MM format
-    
+    schedule_time: Mapped[str] = mapped_column(String(5), default="09:00")  # HH:MM format
+
+    # Telegram user ID of the program owner (for scheduler notifications)
+    owner_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
     
     chats: Mapped[list["ProgramChat"]] = relationship("ProgramChat", back_populates="program", cascade="all, delete-orphan")

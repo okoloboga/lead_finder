@@ -1,7 +1,6 @@
 import asyncio
 import logging
-from aiogram import Router, F, Bot
-from aiogram.fsm.context import FSMContext
+from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,9 +10,9 @@ from sqlalchemy.orm import selectinload
 from bot.models.program import Program
 from bot.models.lead import Lead
 from bot.ui.main_menu import get_main_menu_keyboard
-from bot.services.program_runner import run_program_job # Import the job worker
-from bot.handlers.auth import start_auth_flow
+from bot.services.program_runner import run_program_job
 from bot.ui.lead_card import format_lead_card, get_lead_card_keyboard
+from bot.scheduler import remove_program_job
 from sqlalchemy import delete
 
 logger = logging.getLogger(__name__)
@@ -92,18 +91,16 @@ async def show_program_handler(callback: CallbackQuery, session: AsyncSession):
 # --- 'Run Now' Handler (Non-blocking) ---
 
 @router.callback_query(F.data.startswith("run_program_"))
-async def run_program_handler(callback: CallbackQuery, bot: Bot):
+async def run_program_handler(callback: CallbackQuery):
     program_id = int(callback.data.split("_")[-1])
     logging.info(f"Starting immediate job for program_id={program_id}")
 
-    # Run the job as an asyncio task instead of scheduling it
-    # This avoids pickling issues with the bot object
-    asyncio.create_task(run_program_job(bot, program_id, callback.from_user.id))
+    asyncio.create_task(run_program_job(program_id, callback.from_user.id))
 
     await callback.answer(
         "✅ Программа запущена в фоновом режиме.\n"
         "Результаты будут приходить в чат по мере их нахождения.",
-        show_alert=True
+        show_alert=True,
     )
 
 # --- Delete Flow Handlers ---
@@ -131,6 +128,7 @@ async def delete_program_confirmed(callback: CallbackQuery, session: AsyncSessio
         program_name = program.name
         await session.delete(program)
         await session.commit()
+        remove_program_job(program_id)
         await callback.message.edit_text(f"Программа \"{program_name}\" была удалена.", reply_markup=get_main_menu_keyboard())
     else:
         await callback.message.edit_text("Программа была удалена ранее.", reply_markup=get_main_menu_keyboard())

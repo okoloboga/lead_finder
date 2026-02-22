@@ -1,11 +1,12 @@
 import logging
-from typing import Dict, Any, List, Callable, Awaitable
+from typing import Dict, Any, Callable, Awaitable
 from aiogram import Bot
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+import config
 from bot.db_config import async_session
 from bot.models.program import Program
 from bot.models.lead import Lead
@@ -14,7 +15,8 @@ from modules.telegram_client import AuthorizationRequiredError
 from modules import members_parser, qualifier
 from modules.enrichment import telegram as telegram_enricher
 from modules.enrichment import web_search as web_enricher
-import config
+from modules.pain_collector import collect_pains
+from modules.pain_clusterer import cluster_new_pains
 
 logger = logging.getLogger(__name__)
 
@@ -53,16 +55,18 @@ async def run_program_pipeline(
         return {"error": "No sources found."}
 
     all_candidates = []
+    all_chat_messages: list[dict] = []  # Collected for pain analysis (Task #7)
     try:
         for source in sources:
             logger.info(f"--- Parsing source: {source} ---")
-            candidates = await members_parser.parse_users_from_messages(
+            candidates, chat_messages = await members_parser.parse_users_from_messages(
                 chat_identifier=source,
                 messages_limit=config.MESSAGES_LIMIT,
                 only_with_channels=False,
                 use_batch_analysis=True  # Use batch analysis for efficiency
             )
             all_candidates.extend(candidates)
+            all_chat_messages.extend(chat_messages)
     except AuthorizationRequiredError:
         logger.warning("Authorization is required to proceed. Aborting pipeline.")
         return {"status": "auth_required"}
@@ -70,6 +74,10 @@ async def run_program_pipeline(
     total_candidates = len(all_candidates)
     qualified_leads_count = 0
     logger.info(f"--- Found a total of {total_candidates} unique candidates. ---")
+
+    ai_ideas = web_enricher.search_ai_ideas_for_niche(program.niche_description)
+    if ai_ideas:
+        logger.info("AI ideas for niche fetched from web search.")
 
     for i, candidate in enumerate(all_candidates):
         if not candidate.get('username'):
@@ -79,7 +87,7 @@ async def run_program_pipeline(
         
         enrichment_data = await _enrich_candidate(candidate, program.enrich)
         
-        qualification_result_data = qualifier.qualify_lead(candidate, enrichment_data, program.niche_description)
+        qualification_result_data = qualifier.qualify_lead(candidate, enrichment_data, program.niche_description, ai_ideas)
 
         if "error" in qualification_result_data:
             logger.error(f"Qualification error for @{candidate['username']}: {qualification_result_data['error']}")
@@ -101,7 +109,10 @@ async def run_program_pipeline(
         qualified_leads_count += 1
 
         username = candidate['username']
-        existing_lead_query = select(Lead).where(Lead.telegram_username == username)
+        existing_lead_query = select(Lead).where(
+            Lead.program_id == program.id,
+            Lead.telegram_username == username,
+        )
         lead = (await session.execute(existing_lead_query)).scalars().first()
 
         # Extract data according to the prompt schema
@@ -183,19 +194,28 @@ async def run_program_pipeline(
 
     return {
         "program_name": program.name, "candidates_found": total_candidates,
-        "leads_qualified": qualified_leads_count
+        "leads_qualified": qualified_leads_count,
+        "all_chat_messages": all_chat_messages,  # Passed to caller for pain analysis
     }
 
 
-# --- New APScheduler Job Worker ---
+# --- APScheduler Job Worker ---
 
-async def run_program_job(bot: Bot, program_id: int, chat_id: int):
+async def run_program_job(program_id: int, chat_id: int) -> None:
     """
-    This function is executed by APScheduler. It runs the pipeline for a
-    single program and sends results back to the user.
+    Executed by APScheduler (or asyncio.create_task for manual runs).
+    Creates its own Bot instance so it can be safely serialized by APScheduler.
     """
     logger.info(f"[JOB] Starting job for program_id={program_id}, user_chat_id={chat_id}")
-    
+    bot = Bot(token=config.TELEGRAM_BOT_TOKEN, parse_mode="HTML")
+    try:
+        await _run_program_job_inner(bot, program_id, chat_id)
+    finally:
+        await bot.session.close()
+
+
+async def _run_program_job_inner(bot: Bot, program_id: int, chat_id: int) -> None:
+    """Inner logic for run_program_job, separated to allow proper Bot cleanup."""
     # Each job needs its own database session
     async with async_session() as session:
         program_query = select(Program).options(selectinload(Program.chats)).where(Program.id == program_id)
@@ -208,19 +228,19 @@ async def run_program_job(bot: Bot, program_id: int, chat_id: int):
 
         # --- Define the real-time callback for this job ---
         qualified_leads_count = 0
-        async def send_lead_card_callback(lead: Lead):
+        async def send_lead_card_callback(lead: Lead) -> None:
             nonlocal qualified_leads_count
             qualified_leads_count += 1
             card_text = format_lead_card(lead, qualified_leads_count, "??")
             await bot.send_message(
                 chat_id, card_text,
-                reply_markup=get_lead_card_keyboard(lead.id),
+                reply_markup=get_lead_card_keyboard(lead.id, lead.status),
                 disable_web_page_preview=True
             )
 
         await bot.send_message(chat_id, f"⏳ Запускаю программу \"{program.name}\" в фоновом режиме...")
         run_results = await run_program_pipeline(program, session, on_lead_found=send_lead_card_callback)
-        
+
         if run_results.get("status") == "auth_required":
             await bot.send_message(chat_id, "Требуется авторизация в Telegram. Пожалуйста, запустите программу еще раз, чтобы войти.")
             return
@@ -228,6 +248,33 @@ async def run_program_job(bot: Bot, program_id: int, chat_id: int):
         if "error" in run_results:
             await bot.send_message(chat_id, f"❌ Ошибка при выполнении программы \"{run_results['program_name']}\":\n{run_results['error']}")
             return
+
+        # --- Pain collection (runs after lead pipeline) ---
+        all_chat_messages = run_results.get("all_chat_messages", [])
+        if all_chat_messages:
+            logger.info(
+                f"[JOB] Starting pain collection: {len(all_chat_messages)} messages "
+                f"for program_id={program_id}."
+            )
+            chat_name = program.chats[0].chat_username if program.chats else "unknown"
+            try:
+                pains_count = await collect_pains(
+                    all_messages=all_chat_messages,
+                    program_id=program_id,
+                    chat_name=chat_name,
+                    session=session,
+                )
+                logger.info(f"[JOB] Pain collection done: {pains_count} new pains saved.")
+            except Exception as e:
+                logger.error(f"[JOB] Pain collection failed: {e}")
+
+        # --- Pain clustering (runs after all pain collection) ---
+        if config.PAIN_COLLECTION_ENABLED:
+            try:
+                clustered = await cluster_new_pains(program_id, session)
+                logger.info(f"[JOB] Pain clustering done: {clustered} pains clustered.")
+            except Exception as e:
+                logger.error(f"[JOB] Pain clustering failed: {e}")
 
         final_summary_text = (
             f"✅ Готово! Поиск по программе \"{run_results['program_name']}\" завершен.\n"
