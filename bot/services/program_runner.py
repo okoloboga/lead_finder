@@ -267,6 +267,7 @@ async def _run_program_job_inner(bot: Bot, program_id: int, chat_id: int) -> Non
                 logger.info(f"[JOB] Pain collection done: {pains_count} new pains saved.")
             except Exception as e:
                 logger.error(f"[JOB] Pain collection failed: {e}")
+                await session.rollback()
 
         # --- Pain clustering (runs after all pain collection) ---
         if config.PAIN_COLLECTION_ENABLED:
@@ -275,6 +276,7 @@ async def _run_program_job_inner(bot: Bot, program_id: int, chat_id: int) -> Non
                 logger.info(f"[JOB] Pain clustering done: {clustered} pains clustered.")
             except Exception as e:
                 logger.error(f"[JOB] Pain clustering failed: {e}")
+                await session.rollback()
 
         final_summary_text = (
             f"✅ Готово! Поиск по программе \"{run_results['program_name']}\" завершен.\n"

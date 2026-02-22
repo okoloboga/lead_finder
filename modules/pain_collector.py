@@ -55,6 +55,41 @@ def _parse_llm_json(raw: str) -> dict:
     return json.loads(text)
 
 
+def _normalize_text(
+    value: Any, default: str | None = ""
+) -> str | None:
+    """Normalize potentially-null/non-string LLM field to a safe text value."""
+    if isinstance(value, str):
+        text = value.strip()
+        return text if text else default
+    return default
+
+
+def _normalize_category(value: Any) -> str:
+    """Return a valid pain category or fallback to 'other'."""
+    allowed = {
+        "operations",
+        "sales",
+        "communication",
+        "analytics",
+        "automation",
+        "marketplace",
+        "hiring",
+        "finance",
+        "legal",
+        "other",
+    }
+    category = _normalize_text(value, "other").lower()
+    return category if category in allowed else "other"
+
+
+def _normalize_intensity(value: Any) -> str:
+    """Return a valid intensity or fallback to 'low'."""
+    allowed = {"low", "medium", "high"}
+    intensity = _normalize_text(value, "low").lower()
+    return intensity if intensity in allowed else "low"
+
+
 def _render_prompt(
     template: str,
     *,
@@ -156,19 +191,33 @@ async def collect_pains(
                 continue
 
             source_msg = batch[idx]
-            original_quote = raw.get("original_quote", "")
+            text = _normalize_text(raw.get("text"))
+            original_quote = _normalize_text(raw.get("original_quote"))
+            category = _normalize_category(raw.get("category"))
+            intensity = _normalize_intensity(raw.get("intensity"))
+            business_type = _normalize_text(raw.get("business_type"), None)
             source_chat = source_msg.get("chat_username") or ""
 
-            # Deduplication check
-            existing = (
-                await session.execute(
-                    select(Pain).where(
-                        Pain.source_message_id == source_msg["message_id"],
-                        Pain.source_chat == source_chat,
-                        Pain.original_quote == original_quote,
-                    )
+            # Skip malformed LLM rows that would violate NOT NULL constraints
+            # or create unusable pain records.
+            if not text or not original_quote:
+                logger.debug(
+                    "pain_collector: Skipping malformed pain row "
+                    "(empty text/original_quote)."
                 )
-            ).scalars().first()
+                continue
+
+            # Deduplication check
+            with session.no_autoflush:
+                existing = (
+                    await session.execute(
+                        select(Pain).where(
+                            Pain.source_message_id == source_msg["message_id"],
+                            Pain.source_chat == source_chat,
+                            Pain.original_quote == original_quote,
+                        )
+                    )
+                ).scalars().first()
 
             if existing:
                 continue
@@ -183,11 +232,11 @@ async def collect_pains(
 
             pain = Pain(
                 program_id=program_id,
-                text=raw.get("text", ""),
+                text=text,
                 original_quote=original_quote,
-                category=raw.get("category", "other"),
-                intensity=raw.get("intensity", "low"),
-                business_type=raw.get("business_type"),
+                category=category,
+                intensity=intensity,
+                business_type=business_type,
                 source_chat=source_chat,
                 source_message_id=source_msg["message_id"],
                 source_message_link=source_msg.get("link"),
