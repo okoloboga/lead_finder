@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from langchain_openai import ChatOpenAI
@@ -88,6 +88,26 @@ def _normalize_intensity(value: Any) -> str:
     allowed = {"low", "medium", "high"}
     intensity = _normalize_text(value, "low").lower()
     return intensity if intensity in allowed else "low"
+
+
+def _parse_message_date(raw_date: Any) -> datetime | None:
+    """Parse ISO date and normalize to UTC naive datetime for DB storage.
+
+    DB columns use timestamp without timezone, so aware datetimes from Telegram
+    must be converted to naive UTC to avoid asyncpg DataError.
+    """
+    if not raw_date or not isinstance(raw_date, str):
+        return None
+
+    try:
+        msg_date = datetime.fromisoformat(raw_date)
+    except ValueError:
+        return None
+
+    if msg_date.tzinfo is not None:
+        msg_date = msg_date.astimezone(timezone.utc).replace(tzinfo=None)
+
+    return msg_date
 
 
 def _render_prompt(
@@ -222,13 +242,7 @@ async def collect_pains(
             if existing:
                 continue
 
-            raw_date = source_msg.get("date")
-            msg_date: datetime | None = None
-            if raw_date:
-                try:
-                    msg_date = datetime.fromisoformat(raw_date)
-                except ValueError:
-                    pass
+            msg_date = _parse_message_date(source_msg.get("date"))
 
             pain = Pain(
                 program_id=program_id,
