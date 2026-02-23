@@ -215,8 +215,10 @@ async def generate_post_menu_handler(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
     """Show all clusters for post generation selection with pagination."""
-    parts = callback.data.split("_")
-    page = int(parts[2]) if len(parts) > 2 else 0
+    page = 0
+    if callback.data.startswith("generate_pains_"):
+        parts = callback.data.split("_")
+        page = int(parts[2]) if len(parts) > 2 else 0
 
     program_ids = await _get_program_ids_for_user(callback.from_user.id, session)
 
