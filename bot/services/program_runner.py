@@ -10,12 +10,12 @@ import config
 from bot.db_config import async_session
 from bot.models.program import Program
 from bot.models.lead import Lead
+from bot.models.pain import Pain
 from bot.ui.lead_card import format_lead_card, get_lead_card_keyboard
 from modules.telegram_client import AuthorizationRequiredError
 from modules import members_parser, qualifier
 from modules.enrichment import telegram as telegram_enricher
 from modules.enrichment import web_search as web_enricher
-from modules.pain_collector import collect_pains
 from modules.pain_clusterer import cluster_new_pains
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,103 @@ async def _enrich_candidate(candidate: Dict[str, Any], enrich_web: bool) -> Dict
     return enrichment_data
 
 
+def _extract_pain_texts(qualification_result: Dict[str, Any]) -> list[str]:
+    """Extract normalized pain texts from LLM qualification output."""
+    pains_raw = qualification_result.get("identified_pains") or []
+    pains: list[str] = []
+    for pain in pains_raw:
+        if isinstance(pain, str):
+            text = pain.strip()
+        elif isinstance(pain, dict):
+            text = (
+                pain.get("pain")
+                or pain.get("text")
+                or pain.get("description")
+                or ""
+            )
+            text = str(text).strip()
+        else:
+            text = ""
+        if text:
+            pains.append(text)
+    return pains
+
+
+async def _save_pains_from_lead(
+    *,
+    program_id: int,
+    candidate: Dict[str, Any],
+    qualification_result: Dict[str, Any],
+    session: AsyncSession,
+) -> int:
+    """Persist pains from an already-qualified lead.
+
+    Uses the lead's parsed chat messages as sources to avoid additional
+    full-chat LLM passes.
+    """
+    pains = _extract_pain_texts(qualification_result)
+    if not pains:
+        return 0
+
+    messages = candidate.get("messages_with_metadata") or []
+    if not messages:
+        return 0
+
+    source_chat = (
+        candidate.get("source_chat_username")
+        or candidate.get("source_chat")
+        or ""
+    )
+    if source_chat:
+        source_chat = str(source_chat).lstrip("@")
+
+    business_type = (
+        (qualification_result.get("identification") or {}).get("business_type")
+    )
+
+    inserted = 0
+    for idx, pain_text in enumerate(pains):
+        msg = messages[idx % len(messages)]
+        source_message_id = msg.get("message_id")
+        if not source_message_id:
+            continue
+
+        original_quote = (msg.get("text") or pain_text or "").strip()
+        if not original_quote:
+            continue
+
+        existing_query = select(Pain).where(
+            Pain.source_message_id == source_message_id,
+            Pain.source_chat == source_chat,
+            Pain.original_quote == original_quote,
+        )
+        existing = (await session.execute(existing_query)).scalars().first()
+        if existing:
+            continue
+
+        pain = Pain(
+            program_id=program_id,
+            text=pain_text,
+            original_quote=original_quote,
+            category="other",
+            intensity="medium",
+            business_type=business_type,
+            source_chat=source_chat,
+            source_message_id=source_message_id,
+            source_message_link=msg.get("link"),
+            source_user_id=candidate.get("user_id"),
+            source_username=candidate.get("username"),
+            message_date=None,
+        )
+        session.add(pain)
+        inserted += 1
+
+    if inserted:
+        await session.flush()
+
+    return inserted
+
+
 async def run_program_pipeline(
     program: Program, 
     session: AsyncSession, 
@@ -55,24 +152,23 @@ async def run_program_pipeline(
         return {"error": "No sources found."}
 
     all_candidates = []
-    all_chat_messages: list[dict] = []  # Collected for pain analysis (Task #7)
     try:
         for source in sources:
             logger.info(f"--- Parsing source: {source} ---")
-            candidates, chat_messages = await members_parser.parse_users_from_messages(
+            candidates, _chat_messages = await members_parser.parse_users_from_messages(
                 chat_identifier=source,
                 messages_limit=config.MESSAGES_LIMIT,
                 only_with_channels=False,
                 use_batch_analysis=True  # Use batch analysis for efficiency
             )
             all_candidates.extend(candidates)
-            all_chat_messages.extend(chat_messages)
     except AuthorizationRequiredError:
         logger.warning("Authorization is required to proceed. Aborting pipeline.")
         return {"status": "auth_required"}
     
     total_candidates = len(all_candidates)
     qualified_leads_count = 0
+    pains_saved_count = 0
     logger.info(f"--- Found a total of {total_candidates} unique candidates. ---")
 
     ai_ideas = web_enricher.search_ai_ideas_for_niche(program.niche_description)
@@ -118,18 +214,9 @@ async def run_program_pipeline(
         # Extract data according to the prompt schema
         identification = qualification_result.get("identification") or {}
         outreach_details = qualification_result.get("outreach") or {}
-        pains_raw = qualification_result.get("identified_pains") or []
         product_idea = qualification_result.get("product_idea") or {}
 
-        # Handle pains - can be list of strings or list of dicts
-        pains = []
-        for pain in pains_raw:
-            if isinstance(pain, str):
-                pains.append(pain)
-            elif isinstance(pain, dict):
-                # Extract pain text from dict (try common keys)
-                pain_text = pain.get("pain") or pain.get("text") or pain.get("description") or str(pain)
-                pains.append(pain_text)
+        pains = _extract_pain_texts(qualification_result)
 
         pains_summary = "\n• ".join(pains) if pains else None
         if pains_summary:
@@ -173,6 +260,23 @@ async def run_program_pipeline(
         # for the user to click on
         await session.commit()
 
+        # Save pains directly from qualified/saved leads (no heavy full-chat pass)
+        try:
+            new_pains = await _save_pains_from_lead(
+                program_id=program.id,
+                candidate=candidate,
+                qualification_result=qualification_result,
+                session=session,
+            )
+            if new_pains:
+                pains_saved_count += new_pains
+                await session.commit()
+        except Exception as e:
+            logger.error(
+                f"Failed to save pains from lead @{username}: {e}"
+            )
+            await session.rollback()
+
         # DEBUG: Verify the lead is actually in the database
         verification_query = select(func.count(Lead.id)).where(Lead.program_id == program.id)
         verified_count = (await session.execute(verification_query)).scalar_one()
@@ -195,7 +299,7 @@ async def run_program_pipeline(
     return {
         "program_name": program.name, "candidates_found": total_candidates,
         "leads_qualified": qualified_leads_count,
-        "all_chat_messages": all_chat_messages,  # Passed to caller for pain analysis
+        "pains_saved": pains_saved_count,
     }
 
 
@@ -249,28 +353,13 @@ async def _run_program_job_inner(bot: Bot, program_id: int, chat_id: int) -> Non
             await bot.send_message(chat_id, f"❌ Ошибка при выполнении программы \"{run_results['program_name']}\":\n{run_results['error']}")
             return
 
-        # --- Pain collection (runs after lead pipeline) ---
-        all_chat_messages = run_results.get("all_chat_messages", [])
-        if all_chat_messages:
-            logger.info(
-                f"[JOB] Starting pain collection: {len(all_chat_messages)} messages "
-                f"for program_id={program_id}."
-            )
-            chat_name = program.chats[0].chat_username if program.chats else "unknown"
-            try:
-                pains_count = await collect_pains(
-                    all_messages=all_chat_messages,
-                    program_id=program_id,
-                    chat_name=chat_name,
-                    session=session,
-                )
-                logger.info(f"[JOB] Pain collection done: {pains_count} new pains saved.")
-            except Exception as e:
-                logger.error(f"[JOB] Pain collection failed: {e}")
-                await session.rollback()
+        pains_saved = run_results.get("pains_saved", 0)
+        logger.info(
+            f"[JOB] Lead-based pain sync done: {pains_saved} pains saved."
+        )
 
         # --- Pain clustering (runs after all pain collection) ---
-        if config.PAIN_COLLECTION_ENABLED:
+        if pains_saved > 0:
             try:
                 clustered = await cluster_new_pains(program_id, session)
                 logger.info(f"[JOB] Pain clustering done: {clustered} pains clustered.")
