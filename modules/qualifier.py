@@ -43,6 +43,87 @@ def _parse_llm_json(raw: str) -> Dict[str, Any]:
     """Parse LLM response text as JSON."""
     return json.loads(_extract_json_payload(raw))
 
+
+def _recover_partial_batch_response(
+    raw: str, analyzed_count: int
+) -> Dict[str, Any] | None:
+    """Best-effort recovery for truncated batch JSON responses.
+
+    If model output is cut in the middle, recover complete lead objects from
+    the `potential_leads` array and return a valid minimal response.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return None
+
+    arr_key = '"potential_leads"'
+    arr_idx = text.find(arr_key)
+    if arr_idx == -1:
+        return None
+
+    arr_start = text.find("[", arr_idx)
+    if arr_start == -1:
+        return None
+
+    # Parse complete JSON objects inside potential_leads array.
+    leads: list[Dict[str, Any]] = []
+    depth = 0
+    obj_start = -1
+    in_string = False
+    escaped = False
+    i = arr_start + 1
+    while i < len(text):
+        ch = text[i]
+
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            i += 1
+            continue
+
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            if depth == 0:
+                obj_start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and obj_start != -1:
+                    chunk = text[obj_start : i + 1]
+                    try:
+                        obj = json.loads(chunk)
+                    except json.JSONDecodeError:
+                        obj = None
+                    if isinstance(obj, dict) and obj.get("username"):
+                        leads.append(obj)
+                    obj_start = -1
+        elif ch == "]" and depth == 0:
+            break
+
+        i += 1
+
+    if not leads:
+        return None
+
+    selected = len(leads)
+    return {
+        "total_messages_analyzed": analyzed_count,
+        "potential_leads": leads,
+        "filtering_stats": {
+            "analyzed": analyzed_count,
+            "with_business_signals": selected,
+            "with_pain_signals": selected,
+            "selected_for_detailed_analysis": selected,
+        },
+        "recovered_from_truncated_json": True,
+    }
+
 # Initialize LLM once at the module level to save memory
 try:
     llm = ChatOpenAI(
@@ -411,6 +492,15 @@ def batch_analyze_chat(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     except json.JSONDecodeError as e:
         logger.error(f"Failed to decode JSON from batch analysis LLM response: {e}")
         logger.error(f"Raw response content: {response.content[:500]}")
+
+        recovered = _recover_partial_batch_response(response.content, len(messages))
+        if recovered:
+            logger.warning(
+                "Recovered partial batch analysis response from truncated JSON. "
+                f"Recovered leads: {len(recovered.get('potential_leads', []))}."
+            )
+            return recovered
+
         try:
             retry_message = HumanMessage(
                 content=(
@@ -429,6 +519,16 @@ def batch_analyze_chat(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
             return parsed_retry
         except Exception as retry_e:
             logger.error(f"Batch analysis retry failed: {retry_e}")
+            recovered_retry = _recover_partial_batch_response(
+                retry_response.content if 'retry_response' in locals() else "",
+                len(messages),
+            )
+            if recovered_retry:
+                logger.warning(
+                    "Recovered partial batch analysis from retry truncated JSON. "
+                    f"Recovered leads: {len(recovered_retry.get('potential_leads', []))}."
+                )
+                return recovered_retry
             return {
                 "error": "JSONDecodeError",
                 "raw_response": response.content,
