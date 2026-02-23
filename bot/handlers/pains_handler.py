@@ -297,6 +297,10 @@ async def generate_post_execute(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
     """Generate a post draft for the selected cluster and type."""
+    # Acknowledge callback immediately to avoid Telegram 30s timeout while
+    # web search + LLM generation is running.
+    await callback.answer()
+
     parts = callback.data.split("_")
     post_type = parts[1]
     cluster_id = int(parts[2])
@@ -318,7 +322,6 @@ async def generate_post_execute(
             "❌ Ошибка при генерации поста. Попробуйте позже.",
             reply_markup=get_cluster_keyboard(cluster_id),
         )
-        await callback.answer()
         return
 
     text = format_draft(post, cluster.name)
@@ -327,7 +330,6 @@ async def generate_post_execute(
         reply_markup=get_draft_keyboard(post.id, cluster_id),
         parse_mode="HTML",
     )
-    await callback.answer("✅ Черновик готов!")
 
 
 # --- My Drafts ---
