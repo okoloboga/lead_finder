@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from typing import Dict, Any, List
 
@@ -12,6 +13,35 @@ logging.basicConfig(
     level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _extract_json_payload(raw: str) -> str:
+    """Extract JSON object from raw LLM output."""
+    text = (raw or "").strip()
+
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if len(lines) >= 2:
+            text = "\n".join(lines[1:])
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return text[start:end + 1]
+
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        return match.group(0)
+
+    return text
+
+
+def _parse_llm_json(raw: str) -> Dict[str, Any]:
+    """Parse LLM response text as JSON."""
+    return json.loads(_extract_json_payload(raw))
 
 # Initialize LLM once at the module level to save memory
 try:
@@ -212,15 +242,7 @@ def qualify_lead(
             f"Call duration: {duration:.2f} seconds."
         )
 
-        # Parse JSON response
-        json_response_str = (
-            response.content.strip()
-            .lstrip("```json")
-            .rstrip("```")
-            .strip()
-        )
-
-        parsed_response = json.loads(json_response_str)
+        parsed_response = _parse_llm_json(response.content)
         logger.info(f"Successfully parsed LLM response for @{username}")
 
         # Get freshness summary for metadata (display only)
@@ -378,15 +400,7 @@ def batch_analyze_chat(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
             f"Call duration: {duration:.2f} seconds."
         )
 
-        # Parse JSON response
-        json_response_str = (
-            response.content.strip()
-            .lstrip("```json")
-            .rstrip("```")
-            .strip()
-        )
-
-        parsed_response = json.loads(json_response_str)
+        parsed_response = _parse_llm_json(response.content)
         logger.info(
             f"Successfully parsed batch analysis. "
             f"Found {len(parsed_response.get('potential_leads', []))} potential leads."
@@ -397,11 +411,29 @@ def batch_analyze_chat(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
     except json.JSONDecodeError as e:
         logger.error(f"Failed to decode JSON from batch analysis LLM response: {e}")
         logger.error(f"Raw response content: {response.content[:500]}")
-        return {
-            "error": "JSONDecodeError",
-            "raw_response": response.content,
-            "potential_leads": []
-        }
+        try:
+            retry_message = HumanMessage(
+                content=(
+                    f"{prompt_template}\n\nСообщения для анализа:\n{messages_json}\n\n"
+                    "ВАЖНО: прошлый ответ был невалидным JSON. "
+                    "Верни ТОЛЬКО валидный JSON без markdown/пояснений. "
+                    "Ограничь potential_leads максимум 20, ответ сделай компактным."
+                )
+            )
+            retry_response = llm.invoke([system_message, retry_message])
+            parsed_retry = _parse_llm_json(retry_response.content)
+            logger.info(
+                "Batch analysis retry succeeded. "
+                f"Found {len(parsed_retry.get('potential_leads', []))} potential leads."
+            )
+            return parsed_retry
+        except Exception as retry_e:
+            logger.error(f"Batch analysis retry failed: {retry_e}")
+            return {
+                "error": "JSONDecodeError",
+                "raw_response": response.content,
+                "potential_leads": []
+            }
     except Exception as e:
         logger.error(f"An error occurred during batch chat analysis: {e}")
         return {"error": str(e), "potential_leads": []}
