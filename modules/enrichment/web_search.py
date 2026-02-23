@@ -73,6 +73,63 @@ def search_ai_ideas_for_niche(niche: str) -> str:
     return "\n".join(lines) + "\n\n"
 
 
+def search_ai_best_practices_for_cluster(
+    cluster_name: str,
+    cluster_description: str,
+    post_type: str,
+) -> str:
+    """Search fresh AI/automation integration practices for a pain cluster.
+
+    Returns a formatted text block for prompt injection.
+    """
+    queries = [
+        (
+            "AI business automation integration best practices "
+            f"{cluster_name} {post_type} 2026"
+        ),
+        (
+            "case study AI agents workflow automation CRM integration "
+            f"{cluster_name} {cluster_description[:120]} 2026"
+        ),
+    ]
+
+    seen_links: set[str] = set()
+    picked_items: list[dict[str, str]] = []
+
+    for query in queries:
+        items = _perform_google_search(query, num_results=5)
+        for item in items:
+            link = (item.get("link") or "").strip()
+            if not link or link in seen_links:
+                continue
+            seen_links.add(link)
+            picked_items.append(item)
+            if len(picked_items) >= 6:
+                break
+        if len(picked_items) >= 6:
+            break
+
+    if not picked_items:
+        return (
+            "--- Актуальные best practices AI-интеграций (из сети) ---\n"
+            "- Нет данных из поиска (проверь GOOGLE_API_KEY/GOOGLE_CSE_ID).\n\n"
+        )
+
+    lines = ["--- Актуальные best practices AI-интеграций (из сети) ---"]
+    for item in picked_items:
+        title = (item.get("title") or "").strip()
+        snippet = (item.get("snippet") or "").strip()
+        link = (item.get("link") or "").strip()
+        if title and snippet:
+            lines.append(f"- {title}: {snippet}")
+        elif title:
+            lines.append(f"- {title}")
+        if link:
+            lines.append(f"  Источник: {link}")
+
+    return "\n".join(lines) + "\n\n"
+
+
 # --- Legacy v1 functions ---
 
 def _generate_v1_search_queries(niche: str) -> list[str]:
