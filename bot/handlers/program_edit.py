@@ -19,11 +19,11 @@ def get_edit_menu_keyboard(program_id: int) -> InlineKeyboardMarkup:
     """Creates the edit menu keyboard."""
     builder = InlineKeyboardBuilder()
     builder.button(text="📝 Название", callback_data=f"edit_name_{program_id}")
-    builder.button(text="🎯 Описание ниши", callback_data=f"edit_niche_{program_id}")
+    builder.button(text="🎯 Ниша", callback_data=f"edit_niche_{program_id}")
     builder.button(text="💬 Чаты", callback_data=f"edit_chats_{program_id}")
     builder.button(text="⚙️ Настройки", callback_data=f"edit_settings_{program_id}")
-    builder.button(text="◀️ Назад к программе", callback_data=f"show_program_{program_id}")
-    builder.adjust(1)
+    builder.button(text="◀️ Назад", callback_data=f"show_program_{program_id}")
+    builder.adjust(2, 2, 1)
     return builder.as_markup()
 
 

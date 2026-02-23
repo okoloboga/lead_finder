@@ -22,7 +22,7 @@ def get_my_programs_keyboard(programs: list[Program]) -> InlineKeyboardMarkup:
         builder.button(text="➕ Создать программу", callback_data="create_program")
     
     # These buttons will appear on their own rows due to adjust or explicitly being added after others
-    builder.button(text="🏠 Главное меню", callback_data="main_menu")
+    builder.button(text="◀️ Назад", callback_data="main_menu")
     builder.adjust(1) # Ensure these last two buttons are on separate rows, or a different adjust if more buttons are added
 
     return builder.as_markup()

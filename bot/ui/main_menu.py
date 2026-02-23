@@ -12,9 +12,6 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     """Returns inline keyboard for the main menu."""
     builder = InlineKeyboardBuilder()
     builder.button(text="📋 Мои программы", callback_data="my_programs")
-    builder.button(text="➕ Создать программу", callback_data="create_program")
-    builder.button(text="📊 Статистика", callback_data="statistics")
     builder.button(text="🔥 Боли и контент", callback_data="pains_menu")
-    builder.button(text="⚙️ Настройки", callback_data="settings")
     builder.adjust(1)  # Adjust to 1 button per row
     return builder.as_markup()

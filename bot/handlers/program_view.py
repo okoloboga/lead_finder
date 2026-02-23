@@ -25,11 +25,11 @@ def get_program_card_keyboard(program_id: int, leads_count: int = 0) -> InlineKe
     if leads_count > 0:
         builder.button(text=f"👀 Посмотреть лидов ({leads_count})", callback_data=f"view_program_leads_{program_id}")
         builder.button(text="🗑 Очистить лидов", callback_data=f"clear_leads_{program_id}")
-    builder.button(text="▶️ Запустить сейчас", callback_data=f"run_program_{program_id}")
+    builder.button(text="▶️ Запустить", callback_data=f"run_program_{program_id}")
     builder.button(text="✏️ Изменить", callback_data=f"edit_program_{program_id}")
-    builder.button(text="🗑 Удалить программу", callback_data=f"delete_program_{program_id}")
-    builder.button(text="◀️ К программам", callback_data="my_programs")
-    builder.adjust(2 if leads_count > 0 else 1, 1, 1, 1, 1)
+    builder.button(text="🗑 Удалить", callback_data=f"delete_program_{program_id}")
+    builder.button(text="◀️ Назад", callback_data="my_programs")
+    builder.adjust(2 if leads_count > 0 else 1, 2, 1, 1)
     return builder.as_markup()
 
 def get_delete_confirmation_keyboard(program_id: int) -> InlineKeyboardMarkup:
