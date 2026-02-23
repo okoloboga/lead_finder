@@ -21,6 +21,8 @@ from modules.pain_clusterer import cluster_new_pains
 logger = logging.getLogger(__name__)
 
 LeadCallback = Callable[[Lead], Awaitable[None]]
+_INT32_MIN = -(2**31)
+_INT32_MAX = 2**31 - 1
 
 
 async def _enrich_candidate(candidate: Dict[str, Any], enrich_web: bool) -> Dict[str, Any]:
@@ -95,6 +97,15 @@ async def _save_pains_from_lead(
     )
 
     inserted = 0
+    raw_user_id = candidate.get("user_id")
+    safe_user_id: int | None = None
+    if isinstance(raw_user_id, int) and _INT32_MIN <= raw_user_id <= _INT32_MAX:
+        safe_user_id = raw_user_id
+    elif raw_user_id is not None:
+        logger.debug(
+            f"Skip source_user_id={raw_user_id} for pains: out of int32 range."
+        )
+
     for idx, pain_text in enumerate(pains):
         msg = messages[idx % len(messages)]
         source_message_id = msg.get("message_id")
@@ -124,7 +135,7 @@ async def _save_pains_from_lead(
             source_chat=source_chat,
             source_message_id=source_message_id,
             source_message_link=msg.get("link"),
-            source_user_id=candidate.get("user_id"),
+            source_user_id=safe_user_id,
             source_username=candidate.get("username"),
             message_date=None,
         )
@@ -145,7 +156,10 @@ async def run_program_pipeline(
     """
     Runs the full lead-finding pipeline, sending leads in real-time via a callback.
     """
-    logger.info(f"Starting REAL pipeline for program '{program.name}' (ID: {program.id})")
+    program_id = program.id
+    logger.info(
+        f"Starting REAL pipeline for program '{program.name}' (ID: {program_id})"
+    )
     
     sources = [chat.chat_username for chat in program.chats]
     if not sources:
@@ -206,7 +220,7 @@ async def run_program_pipeline(
 
         username = candidate['username']
         existing_lead_query = select(Lead).where(
-            Lead.program_id == program.id,
+            Lead.program_id == program_id,
             Lead.telegram_username == username,
         )
         lead = (await session.execute(existing_lead_query)).scalars().first()
@@ -248,7 +262,11 @@ async def run_program_pipeline(
                 setattr(lead, key, value)
         else:
             logger.info(f"Creating new lead for @{username} with program_id={program.id}")
-            lead = Lead(program_id=program.id, telegram_username=username, **lead_data)
+            lead = Lead(
+                program_id=program_id,
+                telegram_username=username,
+                **lead_data,
+            )
             session.add(lead)
 
         await session.flush()
@@ -263,7 +281,7 @@ async def run_program_pipeline(
         # Save pains directly from qualified/saved leads (no heavy full-chat pass)
         try:
             new_pains = await _save_pains_from_lead(
-                program_id=program.id,
+                program_id=program_id,
                 candidate=candidate,
                 qualification_result=qualification_result,
                 session=session,
@@ -278,9 +296,13 @@ async def run_program_pipeline(
             await session.rollback()
 
         # DEBUG: Verify the lead is actually in the database
-        verification_query = select(func.count(Lead.id)).where(Lead.program_id == program.id)
+        verification_query = select(func.count(Lead.id)).where(
+            Lead.program_id == program_id
+        )
         verified_count = (await session.execute(verification_query)).scalar_one()
-        logger.info(f"After commit: Total leads for program_id={program.id}: {verified_count}")
+        logger.info(
+            f"After commit: Total leads for program_id={program_id}: {verified_count}"
+        )
 
         if on_lead_found:
             await on_lead_found(lead)
@@ -292,7 +314,9 @@ async def run_program_pipeline(
     await session.commit()
 
     # Final verification
-    final_count_query = select(func.count(Lead.id)).where(Lead.program_id == program.id)
+    final_count_query = select(func.count(Lead.id)).where(
+        Lead.program_id == program_id
+    )
     final_count = (await session.execute(final_count_query)).scalar_one()
     logger.info(f"Pipeline complete for program '{program.name}'. Final lead count in DB: {final_count}")
 
