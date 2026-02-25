@@ -23,6 +23,14 @@ TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
 TELEGRAM_PHONE = os.getenv("TELEGRAM_PHONE")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
+# Admin panel access (comma-separated Telegram IDs)
+_admin_ids_raw = os.getenv("ADMIN_TELEGRAM_IDS", "")
+ADMIN_TELEGRAM_IDS = {
+    int(part.strip())
+    for part in _admin_ids_raw.split(",")
+    if part.strip().isdigit()
+}
+
 #
 # Application Settings
 #

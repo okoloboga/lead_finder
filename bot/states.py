@@ -21,3 +21,7 @@ class ProgramEdit(StatesGroup):
 
 class UserProfile(StatesGroup):
     enter_services_description = State()
+
+
+class AdminPanel(StatesGroup):
+    waiting_user_query = State()

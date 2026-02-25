@@ -16,6 +16,7 @@ from bot.handlers import (
     program_edit,
     pains_handler,
     subscription,
+    admin_panel,
 )
 from bot.middleware.db_session import DbSessionMiddleware
 from bot.models.base import Base
@@ -77,6 +78,7 @@ async def main(bot_token: str) -> None:
     dp.include_router(lead_viewer.router)
     dp.include_router(pains_handler.router)
     dp.include_router(subscription.router)
+    dp.include_router(admin_panel.router)
 
     dp.shutdown.register(scheduler.shutdown)
 
