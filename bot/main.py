@@ -6,7 +6,17 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import select
 
 from bot.db_config import engine, async_session
-from bot.handlers import start, program_create, program_list, program_view, auth, lead_viewer, program_edit, pains_handler
+from bot.handlers import (
+    start,
+    program_create,
+    program_list,
+    program_view,
+    auth,
+    lead_viewer,
+    program_edit,
+    pains_handler,
+    subscription,
+)
 from bot.middleware.db_session import DbSessionMiddleware
 from bot.models.base import Base
 from bot.models.program import Program, ProgramChat
@@ -66,6 +76,7 @@ async def main(bot_token: str) -> None:
     dp.include_router(auth.router)
     dp.include_router(lead_viewer.router)
     dp.include_router(pains_handler.router)
+    dp.include_router(subscription.router)
 
     dp.shutdown.register(scheduler.shutdown)
 

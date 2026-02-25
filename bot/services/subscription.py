@@ -6,6 +6,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.models.program import Program
 from bot.models.user import User
 
+PAID_PERIODS_MONTHS = {
+    "1m": 1,
+    "3m": 3,
+    "6m": 6,
+    "12m": 12,
+}
+
+STARS_PRICES = {
+    "1m": 500,
+    "3m": 1300,
+    "6m": 2400,
+    "12m": 4200,
+}
+
 
 def _utc_now() -> datetime.datetime:
     return datetime.datetime.utcnow()
@@ -65,3 +79,22 @@ def check_weekly_analysis_limit(user: User) -> tuple[bool, int]:
 
 def mark_analysis_started(user: User) -> None:
     user.last_analysis_at = _utc_now()
+
+
+def add_months(base: datetime.datetime, months: int) -> datetime.datetime:
+    year = base.year + (base.month - 1 + months) // 12
+    month = (base.month - 1 + months) % 12 + 1
+    day = min(base.day, 28)
+    return base.replace(year=year, month=month, day=day)
+
+
+def activate_paid_subscription(user: User, period_key: str) -> datetime.datetime:
+    months = PAID_PERIODS_MONTHS[period_key]
+    normalize_subscription(user)
+    start = _utc_now()
+    if user.subscription_expires_at and user.subscription_expires_at > start:
+        start = user.subscription_expires_at
+    new_expiry = add_months(start, months)
+    user.subscription_type = "paid"
+    user.subscription_expires_at = new_expiry
+    return new_expiry
