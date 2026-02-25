@@ -91,7 +91,10 @@ async def show_edit_menu(callback: CallbackQuery, session: AsyncSession, state: 
     # Clear any existing state
     await state.clear()
 
-    query = select(Program).where(Program.id == program_id)
+    query = select(Program).where(
+        Program.id == program_id,
+        Program.user_id == callback.from_user.id,
+    )
     program = (await session.execute(query)).scalars().first()
 
     if not program:
@@ -134,7 +137,10 @@ async def edit_name_save(message: Message, state: FSMContext, session: AsyncSess
         await message.answer("Название не может быть пустым. Попробуй снова:")
         return
 
-    query = select(Program).where(Program.id == program_id)
+    query = select(Program).where(
+        Program.id == program_id,
+        Program.user_id == message.from_user.id,
+    )
     program = (await session.execute(query)).scalars().first()
 
     if program:
@@ -176,7 +182,10 @@ async def edit_niche_save(message: Message, state: FSMContext, session: AsyncSes
         await message.answer("Описание не может быть пустым. Попробуй снова:")
         return
 
-    query = select(Program).where(Program.id == program_id)
+    query = select(Program).where(
+        Program.id == program_id,
+        Program.user_id == message.from_user.id,
+    )
     program = (await session.execute(query)).scalars().first()
 
     if program:
@@ -198,7 +207,10 @@ async def edit_chats_start(callback: CallbackQuery, state: FSMContext, session: 
     """Shows current chats and allows adding/removing."""
     program_id = int(callback.data.split("_")[-1])
 
-    query = select(Program).options(selectinload(Program.chats)).where(Program.id == program_id)
+    query = select(Program).options(selectinload(Program.chats)).where(
+        Program.id == program_id,
+        Program.user_id == callback.from_user.id,
+    )
     program = (await session.execute(query)).scalars().first()
 
     if not program:
@@ -235,7 +247,10 @@ async def edit_chats_process(message: Message, state: FSMContext, session: Async
 
     text = message.text.strip()
 
-    query = select(Program).options(selectinload(Program.chats)).where(Program.id == program_id)
+    query = select(Program).options(selectinload(Program.chats)).where(
+        Program.id == program_id,
+        Program.user_id == message.from_user.id,
+    )
     program = (await session.execute(query)).scalars().first()
 
     if not program:
@@ -298,7 +313,10 @@ async def edit_settings_show(callback: CallbackQuery, session: AsyncSession, sta
     """Shows settings editor."""
     program_id = int(callback.data.split("_")[-1])
 
-    query = select(Program).where(Program.id == program_id)
+    query = select(Program).where(
+        Program.id == program_id,
+        Program.user_id == callback.from_user.id,
+    )
     program = (await session.execute(query)).scalars().first()
 
     if not program:
@@ -311,7 +329,7 @@ async def edit_settings_show(callback: CallbackQuery, session: AsyncSession, sta
         min_score=program.min_score,
         max_leads=program.max_leads_per_run,
         enrich=program.enrich,
-        auto_collect=program.owner_chat_id is not None,
+        auto_collect=program.auto_collect_enabled,
     )
 
     text = (
@@ -320,7 +338,7 @@ async def edit_settings_show(callback: CallbackQuery, session: AsyncSession, sta
         f"Лидов за запуск: {program.max_leads_per_run}\n"
         f"Web-обогащение: {'Вкл' if program.enrich else 'Выкл'}\n"
         f"Автосбор по расписанию: "
-        f"{'Вкл' if program.owner_chat_id is not None else 'Выкл'}"
+        f"{'Вкл' if program.auto_collect_enabled else 'Выкл'}"
     )
 
     keyboard = get_settings_keyboard(
@@ -328,7 +346,7 @@ async def edit_settings_show(callback: CallbackQuery, session: AsyncSession, sta
         program.min_score,
         program.max_leads_per_run,
         program.enrich,
-        program.owner_chat_id is not None,
+        program.auto_collect_enabled,
     )
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
@@ -457,20 +475,23 @@ async def save_settings(callback: CallbackQuery, state: FSMContext, session: Asy
     program_id = int(callback.data.split("_")[-1])
     data = await state.get_data()
 
-    query = select(Program).where(Program.id == program_id)
+    query = select(Program).where(
+        Program.id == program_id,
+        Program.user_id == callback.from_user.id,
+    )
     program = (await session.execute(query)).scalars().first()
 
     if program:
         program.min_score = data.get('min_score', 5)
         program.max_leads_per_run = data.get('max_leads', 20)
         program.enrich = data.get('enrich', False)
-        auto_collect = data.get('auto_collect', program.owner_chat_id is not None)
+        auto_collect = data.get('auto_collect', program.auto_collect_enabled)
+        program.auto_collect_enabled = auto_collect
         if auto_collect:
             owner_chat_id = program.owner_chat_id or callback.from_user.id
             program.owner_chat_id = owner_chat_id
             schedule_program_job(program.id, owner_chat_id, program.schedule_time)
         else:
-            program.owner_chat_id = None
             remove_program_job(program.id)
         await session.commit()
 

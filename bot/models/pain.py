@@ -1,5 +1,6 @@
 import datetime
 from sqlalchemy import (
+    BigInteger,
     Integer,
     Float,
     String,
@@ -19,6 +20,7 @@ class PainCluster(Base):
     __tablename__ = "pain_clusters"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     program_id: Mapped[int] = mapped_column(
         ForeignKey("programs.id", ondelete="CASCADE"), nullable=False
     )
@@ -67,6 +69,7 @@ class Pain(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     program_id: Mapped[int] = mapped_column(
         ForeignKey("programs.id", ondelete="CASCADE"), nullable=False
     )
@@ -119,6 +122,7 @@ class GeneratedPost(Base):
     __tablename__ = "generated_posts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     cluster_id: Mapped[int] = mapped_column(
         ForeignKey("pain_clusters.id", ondelete="CASCADE"),
         nullable=False,

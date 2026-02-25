@@ -165,6 +165,7 @@ async def _extract_pains_batch(
 
 async def collect_pains(
     all_messages: list[dict],
+    user_id: int,
     program_id: int,
     chat_name: str,
     session: AsyncSession,
@@ -232,6 +233,7 @@ async def collect_pains(
                 existing = (
                     await session.execute(
                         select(Pain).where(
+                            Pain.user_id == user_id,
                             Pain.source_message_id == source_msg["message_id"],
                             Pain.source_chat == source_chat,
                             Pain.original_quote == original_quote,
@@ -245,6 +247,7 @@ async def collect_pains(
             msg_date = _parse_message_date(source_msg.get("date"))
 
             pain = Pain(
+                user_id=user_id,
                 program_id=program_id,
                 text=text,
                 original_quote=original_quote,

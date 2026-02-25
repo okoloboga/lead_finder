@@ -62,7 +62,11 @@ async def _get_program_ids_for_user(
     """
     from bot.models.program import Program
 
-    result = await session.execute(select(Program.id).order_by(Program.id))
+    result = await session.execute(
+        select(Program.id)
+        .where(Program.user_id == user_id)
+        .order_by(Program.id)
+    )
     return [row[0] for row in result.all()]
 
 
@@ -172,7 +176,15 @@ async def cluster_detail_handler(callback: CallbackQuery, session: AsyncSession)
     """Show detail view of a single pain cluster with sample quotes."""
     cluster_id = int(callback.data.split("_")[-1])
 
-    cluster = await session.get(PainCluster, cluster_id)
+    program_ids = await _get_program_ids_for_user(callback.from_user.id, session)
+    cluster = (
+        await session.execute(
+            select(PainCluster).where(
+                PainCluster.id == cluster_id,
+                PainCluster.program_id.in_(program_ids),
+            )
+        )
+    ).scalars().first()
     if not cluster:
         await callback.answer("Кластер не найден.", show_alert=True)
         return
@@ -200,7 +212,15 @@ async def cluster_quotes_handler(callback: CallbackQuery, session: AsyncSession)
     cluster_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
 
-    cluster = await session.get(PainCluster, cluster_id)
+    program_ids = await _get_program_ids_for_user(callback.from_user.id, session)
+    cluster = (
+        await session.execute(
+            select(PainCluster).where(
+                PainCluster.id == cluster_id,
+                PainCluster.program_id.in_(program_ids),
+            )
+        )
+    ).scalars().first()
     if not cluster:
         await callback.answer("Кластер не найден.", show_alert=True)
         return
@@ -295,7 +315,15 @@ async def generate_post_choose_type(
     """Generate post for a specific cluster using unified single post type."""
     await callback.answer()
     cluster_id = int(callback.data.split("_")[-1])
-    cluster = await session.get(PainCluster, cluster_id)
+    program_ids = await _get_program_ids_for_user(callback.from_user.id, session)
+    cluster = (
+        await session.execute(
+            select(PainCluster).where(
+                PainCluster.id == cluster_id,
+                PainCluster.program_id.in_(program_ids),
+            )
+        )
+    ).scalars().first()
     if not cluster:
         await callback.answer("Кластер не найден.", show_alert=True)
         return
@@ -338,7 +366,15 @@ async def generate_post_execute(
     parts = callback.data.split("_")
     cluster_id = int(parts[2])
 
-    cluster = await session.get(PainCluster, cluster_id)
+    program_ids = await _get_program_ids_for_user(callback.from_user.id, session)
+    cluster = (
+        await session.execute(
+            select(PainCluster).where(
+                PainCluster.id == cluster_id,
+                PainCluster.program_id.in_(program_ids),
+            )
+        )
+    ).scalars().first()
     if not cluster:
         await callback.answer("Кластер не найден.", show_alert=True)
         return
@@ -419,12 +455,26 @@ async def view_draft_handler(callback: CallbackQuery, session: AsyncSession) -> 
     """Show full text of a draft post."""
     post_id = int(callback.data.split("_")[-1])
 
-    post = await session.get(GeneratedPost, post_id)
+    program_ids = await _get_program_ids_for_user(callback.from_user.id, session)
+    post = (
+        await session.execute(
+            select(GeneratedPost)
+            .join(PainCluster, GeneratedPost.cluster_id == PainCluster.id)
+            .where(
+                GeneratedPost.id == post_id,
+                PainCluster.program_id.in_(program_ids),
+            )
+        )
+    ).scalars().first()
     if not post:
         await callback.answer("Черновик не найден.", show_alert=True)
         return
 
-    cluster = await session.get(PainCluster, post.cluster_id)
+    cluster = (
+        await session.execute(
+            select(PainCluster).where(PainCluster.id == post.cluster_id)
+        )
+    ).scalars().first()
     cluster_name = cluster.name if cluster else "Неизвестный кластер"
 
     text = format_draft(post, cluster_name)
@@ -442,7 +492,15 @@ async def regen_post_handler(callback: CallbackQuery, session: AsyncSession) -> 
     """Regenerate a draft post for cluster in unified mode."""
     await callback.answer()
     cluster_id = int(callback.data.split("_")[-1])
-    cluster = await session.get(PainCluster, cluster_id)
+    program_ids = await _get_program_ids_for_user(callback.from_user.id, session)
+    cluster = (
+        await session.execute(
+            select(PainCluster).where(
+                PainCluster.id == cluster_id,
+                PainCluster.program_id.in_(program_ids),
+            )
+        )
+    ).scalars().first()
     if not cluster:
         await callback.answer("Кластер не найден.", show_alert=True)
         return

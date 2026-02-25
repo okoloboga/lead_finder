@@ -183,6 +183,7 @@ async def generate_post(
         body = body.rstrip() + "\n\n" + " ".join(hashtags)
 
     post = GeneratedPost(
+        user_id=cluster.user_id,
         cluster_id=cluster_id,
         post_type=post_type,
         title=title,

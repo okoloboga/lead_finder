@@ -53,7 +53,14 @@ async def show_program_handler(callback: CallbackQuery, session: AsyncSession):
     logging.info(f"Handling 'show_program' callback: {callback.data}")
     program_id = int(callback.data.split("_")[-1])
 
-    program_query = select(Program).options(selectinload(Program.chats)).where(Program.id == program_id)
+    program_query = (
+        select(Program)
+        .options(selectinload(Program.chats))
+        .where(
+            Program.id == program_id,
+            Program.user_id == callback.from_user.id,
+        )
+    )
     program = (await session.execute(program_query)).scalars().first()
 
     if not program:
@@ -72,10 +79,10 @@ async def show_program_handler(callback: CallbackQuery, session: AsyncSession):
     logger.info(f"All leads in database: {all_leads}")
 
     chats_list_str = "\n".join([f"• @{chat.chat_username}" for chat in program.chats]) if program.chats else "Нет чатов."
-    schedule_status = "✅" if program.owner_chat_id is not None else "❌"
+    schedule_status = "✅" if program.auto_collect_enabled else "❌"
     schedule_label = (
         f"ежедневно в {program.schedule_time}"
-        if program.owner_chat_id is not None else
+        if program.auto_collect_enabled else
         "выключено"
     )
     text = (
@@ -97,9 +104,21 @@ async def show_program_handler(callback: CallbackQuery, session: AsyncSession):
 # --- 'Run Now' Handler (Non-blocking) ---
 
 @router.callback_query(F.data.startswith("run_program_"))
-async def run_program_handler(callback: CallbackQuery):
+async def run_program_handler(callback: CallbackQuery, session: AsyncSession):
     program_id = int(callback.data.split("_")[-1])
     logging.info(f"Starting immediate job for program_id={program_id}")
+
+    owned_program = (
+        await session.execute(
+            select(Program.id).where(
+                Program.id == program_id,
+                Program.user_id == callback.from_user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not owned_program:
+        await callback.answer("Программа не найдена.", show_alert=True)
+        return
 
     asyncio.create_task(run_program_job(program_id, callback.from_user.id))
 
@@ -114,7 +133,10 @@ async def run_program_handler(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("delete_program_"))
 async def delete_program_confirmation(callback: CallbackQuery, session: AsyncSession):
     program_id = int(callback.data.split("_")[-1])
-    query = select(Program).where(Program.id == program_id)
+    query = select(Program).where(
+        Program.id == program_id,
+        Program.user_id == callback.from_user.id,
+    )
     program = (await session.execute(query)).scalars().first()
     if not program:
         await callback.answer("Программа уже удалена.", show_alert=True)
@@ -127,7 +149,10 @@ async def delete_program_confirmation(callback: CallbackQuery, session: AsyncSes
 @router.callback_query(F.data.startswith("confirm_delete_"))
 async def delete_program_confirmed(callback: CallbackQuery, session: AsyncSession):
     program_id = int(callback.data.split("_")[-1])
-    query = select(Program).where(Program.id == program_id)
+    query = select(Program).where(
+        Program.id == program_id,
+        Program.user_id == callback.from_user.id,
+    )
     program = (await session.execute(query)).scalars().first()
 
     if program:
@@ -147,7 +172,10 @@ async def clear_leads_confirmation(callback: CallbackQuery, session: AsyncSessio
     program_id = int(callback.data.split("_")[-1])
 
     # Get program and count leads
-    program_query = select(Program).where(Program.id == program_id)
+    program_query = select(Program).where(
+        Program.id == program_id,
+        Program.user_id == callback.from_user.id,
+    )
     program = (await session.execute(program_query)).scalars().first()
 
     if not program:
@@ -176,7 +204,10 @@ async def clear_leads_confirmed(callback: CallbackQuery, session: AsyncSession):
     program_id = int(callback.data.split("_")[-1])
 
     # Get program
-    program_query = select(Program).where(Program.id == program_id)
+    program_query = select(Program).where(
+        Program.id == program_id,
+        Program.user_id == callback.from_user.id,
+    )
     program = (await session.execute(program_query)).scalars().first()
 
     if not program:
@@ -188,7 +219,10 @@ async def clear_leads_confirmed(callback: CallbackQuery, session: AsyncSession):
     leads_count = (await session.execute(leads_count_query)).scalar_one()
 
     # Delete all leads for this program
-    delete_query = delete(Lead).where(Lead.program_id == program_id)
+    delete_query = delete(Lead).where(
+        Lead.program_id == program_id,
+        Lead.user_id == callback.from_user.id,
+    )
     result = await session.execute(delete_query)
     await session.commit()
 

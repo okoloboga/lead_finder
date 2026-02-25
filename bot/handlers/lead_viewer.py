@@ -40,7 +40,10 @@ async def show_lead_page(
 
     query = (
         select(Lead)
-        .where(Lead.program_id == program_id)
+        .where(
+            Lead.program_id == program_id,
+            Lead.user_id == callback.from_user.id,
+        )
         .options(selectinload(Lead.program))
         .order_by(Lead.created_at.desc())
     )
@@ -79,7 +82,7 @@ async def show_lead_page(
 async def mark_lead_contacted(callback: CallbackQuery, session: AsyncSession):
     """Marks a lead as contacted."""
     lead_id = int(callback.data.split("_")[-1])
-    lead = await _get_lead(session, lead_id)
+    lead = await _get_lead(session, lead_id, callback.from_user.id)
     if lead:
         lead.status = "contacted"
         await session.commit()
@@ -93,7 +96,7 @@ async def mark_lead_contacted(callback: CallbackQuery, session: AsyncSession):
 async def mark_lead_skipped(callback: CallbackQuery, session: AsyncSession):
     """Marks a lead as skipped."""
     lead_id = int(callback.data.split("_")[-1])
-    lead = await _get_lead(session, lead_id)
+    lead = await _get_lead(session, lead_id, callback.from_user.id)
     if lead:
         lead.status = "skipped"
         await session.commit()
@@ -107,7 +110,7 @@ async def mark_lead_skipped(callback: CallbackQuery, session: AsyncSession):
 async def restore_lead(callback: CallbackQuery, session: AsyncSession):
     """Restores a skipped lead back to new."""
     lead_id = int(callback.data.split("_")[-1])
-    lead = await _get_lead(session, lead_id)
+    lead = await _get_lead(session, lead_id, callback.from_user.id)
     if lead:
         lead.status = "new"
         await session.commit()
@@ -123,7 +126,14 @@ async def noop_handler(callback: CallbackQuery):
     await callback.answer()
 
 
-async def _get_lead(session: AsyncSession, lead_id: int) -> Lead | None:
+async def _get_lead(
+    session: AsyncSession, lead_id: int, user_id: int
+) -> Lead | None:
     """Helper to fetch a lead by id."""
-    result = await session.execute(select(Lead).where(Lead.id == lead_id))
+    result = await session.execute(
+        select(Lead).where(
+            Lead.id == lead_id,
+            Lead.user_id == user_id,
+        )
+    )
     return result.scalars().first()

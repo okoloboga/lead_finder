@@ -201,6 +201,7 @@ async def cluster_new_pains(program_id: int, session: AsyncSession) -> int:
 
     # Map pain_id → Pain for fast lookup
     pain_by_id = {p.id: p for p in unclustered}
+    owner_user_id = unclustered[0].user_id
     # Track newly created clusters by their temp "new" key within this run
     new_clusters_cache: dict[str, PainCluster] = {}
     affected_cluster_ids: set[int] = set()
@@ -222,6 +223,7 @@ async def cluster_new_pains(program_id: int, session: AsyncSession) -> int:
 
             if cache_key not in new_clusters_cache:
                 new_cluster = PainCluster(
+                    user_id=owner_user_id,
                     program_id=program_id,
                     name=new_name,
                     category=assignment.get("new_cluster_category", "other"),

@@ -169,8 +169,10 @@ async def save_program(callback: CallbackQuery, state: FSMContext, session: Asyn
 
     owner_chat_id = callback.from_user.id
     new_program = Program(
+        user_id=callback.from_user.id,
         name=data['name'],
         niche_description=data['niche_description'],
+        auto_collect_enabled=True,
         owner_chat_id=owner_chat_id,
     )
 

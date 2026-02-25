@@ -32,7 +32,12 @@ async def my_programs_handler(callback: CallbackQuery, session: AsyncSession):
     logging.info("Handling 'my_programs' callback.")
     
     # Use selectinload to eagerly load the 'chats' relationship
-    query = select(Program).options(selectinload(Program.chats)).order_by(Program.id)
+    query = (
+        select(Program)
+        .options(selectinload(Program.chats))
+        .where(Program.user_id == callback.from_user.id)
+        .order_by(Program.id)
+    )
     result = await session.execute(query)
     programs = result.scalars().all()
 
@@ -47,7 +52,7 @@ async def my_programs_handler(callback: CallbackQuery, session: AsyncSession):
         for i, program in enumerate(programs):
             schedule_status = (
                 f"⏰ {program.schedule_time}"
-                if program.owner_chat_id is not None else
+                if program.auto_collect_enabled else
                 "⏸ выключено"
             )
             text += (

@@ -1,5 +1,6 @@
 import datetime
 from sqlalchemy import (
+    BigInteger,
     Integer,
     String,
     DateTime,
@@ -18,6 +19,7 @@ class Lead(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     program_id: Mapped[int] = mapped_column(ForeignKey('programs.id', ondelete='SET NULL'), nullable=True)
 
     # Core contact info

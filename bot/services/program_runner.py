@@ -76,6 +76,7 @@ def _trim(value: Any, limit: int) -> str | None:
 
 async def _save_pains_from_lead(
     *,
+    user_id: int,
     program_id: int,
     candidate: Dict[str, Any],
     qualification_result: Dict[str, Any],
@@ -135,6 +136,7 @@ async def _save_pains_from_lead(
 
         with session.no_autoflush:
             existing_query = select(Pain).where(
+                Pain.user_id == user_id,
                 Pain.source_message_id == source_message_id,
                 Pain.source_chat == source_chat,
                 Pain.original_quote == original_quote,
@@ -145,6 +147,7 @@ async def _save_pains_from_lead(
             continue
 
         pain = Pain(
+            user_id=user_id,
             program_id=program_id,
             text=pain_text,
             original_quote=original_quote,
@@ -177,6 +180,7 @@ async def run_program_pipeline(
     Runs the full lead-finding pipeline, sending leads in real-time via a callback.
     """
     program_id = program.id
+    user_id = program.user_id
     program_name = program.name
     program_max_leads = program.max_leads_per_run
     logger.info(
@@ -242,6 +246,7 @@ async def run_program_pipeline(
 
         username = candidate['username']
         existing_lead_query = select(Lead).where(
+            Lead.user_id == user_id,
             Lead.program_id == program_id,
             Lead.telegram_username == username,
         )
@@ -287,6 +292,7 @@ async def run_program_pipeline(
                 f"Creating new lead for @{username} with program_id={program_id}"
             )
             lead = Lead(
+                user_id=user_id,
                 program_id=program_id,
                 telegram_username=username,
                 **lead_data,
@@ -318,6 +324,7 @@ async def run_program_pipeline(
         try:
             new_pains = await _save_pains_from_lead(
                 program_id=program_id,
+                user_id=user_id,
                 candidate=candidate,
                 qualification_result=qualification_result,
                 session=session,
@@ -375,7 +382,14 @@ async def _run_program_job_inner(bot: Bot, program_id: int, chat_id: int) -> Non
     """Inner logic for run_program_job, separated to allow proper Bot cleanup."""
     # Each job needs its own database session
     async with async_session() as session:
-        program_query = select(Program).options(selectinload(Program.chats)).where(Program.id == program_id)
+        program_query = (
+            select(Program)
+            .options(selectinload(Program.chats))
+            .where(
+                Program.id == program_id,
+                Program.user_id == chat_id,
+            )
+        )
         program = (await session.execute(program_query)).scalars().first()
 
         if not program:

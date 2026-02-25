@@ -16,6 +16,7 @@ class Program(Base):
     __tablename__ = 'programs'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     niche_description: Mapped[str] = mapped_column(Text, nullable=False)
     
@@ -26,8 +27,9 @@ class Program(Base):
     
     # Schedule
     schedule_time: Mapped[str] = mapped_column(String(5), default="09:00")  # HH:MM format
+    auto_collect_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    # Telegram user ID of the program owner (for scheduler notifications)
+    # Telegram chat ID for scheduler notifications
     owner_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
