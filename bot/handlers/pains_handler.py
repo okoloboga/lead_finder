@@ -54,12 +54,15 @@ async def _safe_edit_text(
 async def _get_program_ids_for_user(
     user_id: int, session: AsyncSession
 ) -> list[int]:
-    """Return all program IDs owned by this user."""
+    """Return all visible program IDs for the Pains & Content section.
+
+    `owner_chat_id` is currently used as the auto-collection toggle marker.
+    Disabled schedules set it to NULL, but programs still exist and must remain
+    available in this section.
+    """
     from bot.models.program import Program
 
-    result = await session.execute(
-        select(Program.id).where(Program.owner_chat_id == user_id)
-    )
+    result = await session.execute(select(Program.id).order_by(Program.id))
     return [row[0] for row in result.all()]
 
 
