@@ -16,6 +16,9 @@ class User(Base):
     subscription_expires_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime, nullable=True
     )
+    last_analysis_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=datetime.datetime.utcnow
     )

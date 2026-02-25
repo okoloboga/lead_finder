@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.states import ProgramCreate
 from bot.ui.main_menu import MAIN_MENU_TEXT, get_main_menu_keyboard
 from bot.models.program import Program, ProgramChat
+from bot.models.user import User
 from bot.scheduler import schedule_program_job
+from bot.services.subscription import check_program_limit
 
 router = Router()
 
@@ -166,6 +168,16 @@ async def back_to_chats(callback: CallbackQuery, state: FSMContext):
 async def save_program(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
     data = await state.get_data()
     logging.info(f"Saving new program with data: {data}")
+
+    user = await session.get(User, callback.from_user.id)
+    if not user:
+        await callback.answer("Профиль не найден. Нажмите /start.", show_alert=True)
+        return
+
+    allowed, reason = await check_program_limit(session, user)
+    if not allowed:
+        await callback.answer(reason, show_alert=True)
+        return
 
     owner_chat_id = callback.from_user.id
     new_program = Program(

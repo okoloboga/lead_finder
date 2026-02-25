@@ -13,6 +13,7 @@ from bot.models.lead import Lead
 from bot.models.pain import Pain
 from bot.models.user import User
 from bot.ui.lead_card import format_lead_card, get_lead_card_keyboard
+from bot.services.subscription import check_weekly_analysis_limit, mark_analysis_started
 from modules.telegram_client import AuthorizationRequiredError
 from modules import members_parser, qualifier
 from modules.enrichment import telegram as telegram_enricher
@@ -407,6 +408,23 @@ async def _run_program_job_inner(bot: Bot, program_id: int, chat_id: int) -> Non
             logger.error(f"[JOB] Program {program_id} not found. Aborting job.")
             await bot.send_message(chat_id, f"❌ Ошибка: не удалось запустить программу, так как она была удалена.")
             return
+
+        user = await session.get(User, chat_id)
+        if not user:
+            await bot.send_message(chat_id, "❌ Профиль пользователя не найден. Нажмите /start.")
+            return
+
+        can_run, days_left = check_weekly_analysis_limit(user)
+        if not can_run:
+            await bot.send_message(
+                chat_id,
+                "⏸ Запуск пропущен: на бесплатном тарифе доступен 1 анализ в неделю. "
+                f"Следующий запуск через {days_left} дн.",
+            )
+            return
+
+        mark_analysis_started(user)
+        await session.commit()
 
         # --- Define the real-time callback for this job ---
         qualified_leads_count = 0

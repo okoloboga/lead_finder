@@ -9,8 +9,10 @@ from sqlalchemy.orm import selectinload
 
 from bot.models.program import Program
 from bot.models.lead import Lead
+from bot.models.user import User
 from bot.ui.main_menu import get_main_menu_keyboard
 from bot.services.program_runner import run_program_job
+from bot.services.subscription import check_weekly_analysis_limit
 from bot.ui.lead_card import format_lead_card, get_lead_card_keyboard
 from bot.scheduler import remove_program_job
 from sqlalchemy import delete
@@ -118,6 +120,20 @@ async def run_program_handler(callback: CallbackQuery, session: AsyncSession):
     ).scalar_one_or_none()
     if not owned_program:
         await callback.answer("Программа не найдена.", show_alert=True)
+        return
+
+    user = await session.get(User, callback.from_user.id)
+    if not user:
+        await callback.answer("Профиль не найден. Нажмите /start.", show_alert=True)
+        return
+
+    can_run, days_left = check_weekly_analysis_limit(user)
+    if not can_run:
+        await callback.answer(
+            f"На бесплатном тарифе доступен 1 анализ в неделю. "
+            f"Следующий запуск через {days_left} дн.",
+            show_alert=True,
+        )
         return
 
     asyncio.create_task(run_program_job(program_id, callback.from_user.id))

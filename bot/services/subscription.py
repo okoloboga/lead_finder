@@ -1,0 +1,67 @@
+import datetime
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from bot.models.program import Program
+from bot.models.user import User
+
+
+def _utc_now() -> datetime.datetime:
+    return datetime.datetime.utcnow()
+
+
+def normalize_subscription(user: User) -> None:
+    if (
+        user.subscription_type == "paid"
+        and user.subscription_expires_at
+        and user.subscription_expires_at <= _utc_now()
+    ):
+        user.subscription_type = "free"
+        user.subscription_expires_at = None
+
+
+def is_paid_user(user: User) -> bool:
+    normalize_subscription(user)
+    return user.subscription_type == "paid"
+
+
+async def check_program_limit(
+    session: AsyncSession, user: User
+) -> tuple[bool, str | None]:
+    if is_paid_user(user):
+        return True, None
+
+    program_count = (
+        await session.execute(
+            select(func.count(Program.id)).where(Program.user_id == user.telegram_id)
+        )
+    ).scalar_one()
+    if program_count >= 1:
+        return (
+            False,
+            "На бесплатном тарифе доступна только 1 программа. "
+            "Оформи подписку, чтобы снять лимит.",
+        )
+    return True, None
+
+
+def check_weekly_analysis_limit(user: User) -> tuple[bool, int]:
+    if is_paid_user(user):
+        return True, 0
+
+    if not user.last_analysis_at:
+        return True, 0
+
+    delta = _utc_now() - user.last_analysis_at
+    if delta >= datetime.timedelta(days=7):
+        return True, 0
+
+    days_left = 7 - delta.days
+    if days_left <= 0:
+        days_left = 1
+    return False, days_left
+
+
+def mark_analysis_started(user: User) -> None:
+    user.last_analysis_at = _utc_now()
