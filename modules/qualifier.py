@@ -269,6 +269,7 @@ def qualify_lead(
     enrichment_data: dict,
     niche: str,
     ai_ideas: str = "",
+    user_services_description: str = "",
 ) -> dict:
     """
     Qualifies a lead using the pre-initialized LLM.
@@ -281,6 +282,10 @@ def qualify_lead(
     prompt_template = load_qualification_prompt()
     if not prompt_template:
         return {"error": "Could not load qualification prompt."}
+    services_text = (user_services_description or "").strip()
+    if not services_text:
+        services_text = "Пользователь не указал описание услуг."
+    prompt_template = prompt_template.replace("{services_description}", services_text)
 
     # Build input data
     input_data = (

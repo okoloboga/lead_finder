@@ -11,6 +11,7 @@ from bot.db_config import async_session
 from bot.models.program import Program
 from bot.models.lead import Lead
 from bot.models.pain import Pain
+from bot.models.user import User
 from bot.ui.lead_card import format_lead_card, get_lead_card_keyboard
 from modules.telegram_client import AuthorizationRequiredError
 from modules import members_parser, qualifier
@@ -214,6 +215,10 @@ async def run_program_pipeline(
     ai_ideas = web_enricher.search_ai_ideas_for_niche(program.niche_description)
     if ai_ideas:
         logger.info("AI ideas for niche fetched from web search.")
+    user_profile = await session.get(User, user_id)
+    user_services_description = (
+        user_profile.services_description if user_profile else ""
+    )
 
     for i, candidate in enumerate(all_candidates):
         if not candidate.get('username'):
@@ -223,7 +228,13 @@ async def run_program_pipeline(
         
         enrichment_data = await _enrich_candidate(candidate, program.enrich)
         
-        qualification_result_data = qualifier.qualify_lead(candidate, enrichment_data, program.niche_description, ai_ideas)
+        qualification_result_data = qualifier.qualify_lead(
+            candidate,
+            enrichment_data,
+            program.niche_description,
+            ai_ideas,
+            user_services_description=user_services_description,
+        )
 
         if "error" in qualification_result_data:
             logger.error(f"Qualification error for @{candidate['username']}: {qualification_result_data['error']}")

@@ -17,3 +17,7 @@ class ProgramEdit(StatesGroup):
     edit_niche = State()
     edit_chats = State()
     edit_settings = State()
+
+
+class UserProfile(StatesGroup):
+    enter_services_description = State()
