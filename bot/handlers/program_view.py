@@ -89,15 +89,15 @@ async def show_program_handler(callback: CallbackQuery, session: AsyncSession):
     )
     text = (
         f"📁 {program.name}\n\n"
-        f"Ниша: {program.niche_description}\n\n"
-        f"Чаты:\n{chats_list_str}\n\n"
-        f"Настройки:\n"
-        f"• Минимальный скор: {program.min_score}\n"
-        f"• Лидов за запуск: макс {program.max_leads_per_run}\n"
-        f"• Web-обогащение: {'вкл' if program.enrich else 'выкл'}\n"
-        f"• Расписание: {schedule_label} {schedule_status}\n\n"
-        f"Статистика:\n"
-        f"• Всего найдено: {leads_count} лидов\n"
+        f"🎯 Ниша: {program.niche_description}\n\n"
+        f"💬 Чаты:\n{chats_list_str}\n\n"
+        f"⚙️ Настройки:\n"
+        f"• 🏆 Минимальный скор: {program.min_score}\n"
+        f"• 👥 Лидов за запуск: макс {program.max_leads_per_run}\n"
+        f"• 🌐 Web-обогащение: {'вкл ✅' if program.enrich else 'выкл ❌'}\n"
+        f"• ⏰ Расписание: {schedule_label} {schedule_status}\n\n"
+        f"📊 Статистика:\n"
+        f"• 🧑 Всего найдено: {leads_count} лидов\n"
     )
 
     await callback.message.edit_text(text, reply_markup=get_program_card_keyboard(program.id, leads_count))
@@ -142,7 +142,7 @@ async def run_program_handler(callback: CallbackQuery, session: AsyncSession):
     asyncio.create_task(run_program_job(program_id, callback.from_user.id))
 
     await callback.answer(
-        "✅ Программа запущена в фоновом режиме.\n"
+        "🚀 Программа запущена!\n"
         "Результаты будут приходить в чат по мере их нахождения.",
         show_alert=True,
     )
@@ -161,7 +161,7 @@ async def delete_program_confirmation(callback: CallbackQuery, session: AsyncSes
         await callback.answer("Программа уже удалена.", show_alert=True)
         return
     
-    text = f"🗑 Удаление программы\n\nТочно удалить \"{program.name}\"?\n\nЭто действие нельзя отменить."
+    text = f"🗑 Удаление программы\n\n⚠️ Точно удалить «{program.name}»?\n\nЭто действие нельзя отменить."
     await callback.message.edit_text(text, reply_markup=get_delete_confirmation_keyboard(program_id))
     await callback.answer()
 
@@ -179,9 +179,9 @@ async def delete_program_confirmed(callback: CallbackQuery, session: AsyncSessio
         await session.delete(program)
         await session.commit()
         remove_program_job(program_id)
-        await callback.message.edit_text(f"Программа \"{program_name}\" была удалена.", reply_markup=get_main_menu_keyboard())
+        await callback.message.edit_text(f"✅ Программа «{program_name}» удалена.", reply_markup=get_main_menu_keyboard())
     else:
-        await callback.message.edit_text("Программа была удалена ранее.", reply_markup=get_main_menu_keyboard())
+        await callback.message.edit_text("✅ Программа уже была удалена ранее.", reply_markup=get_main_menu_keyboard())
     await callback.answer()
 
 # --- Clear Leads Flow Handlers ---

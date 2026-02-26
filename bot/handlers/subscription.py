@@ -53,23 +53,23 @@ def _render_subscription_text(user: User) -> str:
     normalize_subscription(user)
     paid = is_paid_user(user)
     if paid and user.subscription_expires_at:
-        status = f"Paid до {user.subscription_expires_at.strftime('%d.%m.%Y')}"
-        programs_limit = "Безлимит"
-        analyses_limit = "Безлимит"
+        status = f"💚 Paid до {user.subscription_expires_at.strftime('%d.%m.%Y')}"
+        programs_limit = "♾ Безлимит"
+        analyses_limit = "♾ Безлимит"
     else:
-        status = "Free"
+        status = "🆓 Free"
         programs_limit = "1"
         can_run, _ = check_weekly_analysis_limit(user)
-        analyses_limit = "0/1" if not can_run else "1/1 доступен"
+        analyses_limit = "0/1 ⏳" if not can_run else "1/1 ✅"
 
     return (
         "💎 Подписка\n"
         "━━━━━━━━━━━\n\n"
         f"Статус: {status}\n\n"
-        "Лимиты:\n"
-        f"• Программы: {programs_limit}\n"
-        f"• Запусков в неделю: {analyses_limit}\n\n"
-        "Выберите период для оплаты Telegram Stars:"
+        "📊 Лимиты:\n"
+        f"• 📁 Программы: {programs_limit}\n"
+        f"• 🔄 Запусков в неделю: {analyses_limit}\n\n"
+        "⭐ Выберите период для оплаты Telegram Stars:"
     )
 
 
@@ -156,8 +156,9 @@ async def successful_payment_handler(
     await session.commit()
 
     await message.answer(
-        "✅ Подписка активирована.\n"
-        f"Действует до: {expires_at.strftime('%d.%m.%Y')}",
+        "🎉 Подписка активирована!\n"
+        f"📅 Действует до: {expires_at.strftime('%d.%m.%Y')}\n\n"
+        "🚀 Теперь доступны безлимитные программы и запуски анализа.",
         reply_markup=get_main_menu_keyboard(),
     )
 

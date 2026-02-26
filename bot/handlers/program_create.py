@@ -54,9 +54,9 @@ async def create_program_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(ProgramCreate.enter_name)
     await callback.message.edit_text(
         "➕ Новая программа\n\n"
-        "Шаг 1 из 4: Название\n\n"
+        "📝 Шаг 1 из 4: Название\n\n"
         "Как назовём программу?\n"
-        "Например: \"Селлеры WB\", \"Инфобизнес\", \"Логистика\"",
+        "💡 Например: «Селлеры WB», «Инфобизнес», «Логистика»",
         reply_markup=get_step_keyboard()
     )
     await callback.answer()
@@ -67,16 +67,16 @@ async def enter_name(message: Message, state: FSMContext):
     logging.info(f"FSM 'create_program': entered name '{message.text}'")
     program_name = message.text.strip()
     if len(program_name) > 100:
-        await message.answer("Название слишком длинное. Попробуйте что-то до 100 символов.",
+        await message.answer("⚠️ Название слишком длинное. Попробуйте что-то до 100 символов.",
                              reply_markup=get_step_keyboard())
         return
     await state.update_data(name=program_name)
     await state.set_state(ProgramCreate.enter_niche_description)
     await message.answer(
         f"➕ Новая программа: \"{program_name}\"\n\n"
-        "Шаг 2 из 4: Описание ниши\n\n"
-        "Опиши, кого ищем. Это поможет лучше квалифицировать лидов.\n\n"
-        "Например: \"селлеры wildberries и ozon, малый бизнес, ищут автоматизацию\"",
+        "🎯 Шаг 2 из 4: Описание ниши\n\n"
+        "Опиши, кого ищем — это поможет точнее квалифицировать лидов.\n\n"
+        "💡 Например: «селлеры wildberries и ozon, малый бизнес, ищут автоматизацию»",
         reply_markup=get_step_keyboard(back_callback="name")
     )
 
@@ -89,10 +89,10 @@ async def enter_niche_description(message: Message, state: FSMContext):
     data = await state.get_data()
     await message.answer(
         f"➕ Новая программа: \"{data['name']}\"\n\n"
-        "Шаг 3 из 4: Чаты для парсинга\n\n"
+        "💬 Шаг 3 из 4: Чаты для парсинга\n\n"
         "Отправь список чатов, из которых собирать лидов.\n"
         "Можно несколько в одном сообщении, каждый с новой строки.\n\n"
-        "Формат: `@username` или `t.me/username`",
+        "📌 Формат: `@username` или `t.me/username`",
         reply_markup=get_step_keyboard(back_callback="niche_description")
     )
 
@@ -104,8 +104,8 @@ async def enter_chats(message: Message, state: FSMContext):
     
     if not chats:
         logging.warning("User provided message with no valid chat usernames.")
-        await message.answer("Не нашёл валидных юзернеймов чатов. Попробуй ещё раз.\n"
-                             "Формат: `@username` или `t.me/username`",
+        await message.answer("❌ Не нашёл валидных юзернеймов чатов. Попробуй ещё раз.\n"
+                             "📌 Формат: `@username` или `t.me/username`",
                              reply_markup=get_step_keyboard(back_callback="niche_description"))
         return
 
@@ -117,13 +117,13 @@ async def enter_chats(message: Message, state: FSMContext):
     chats_list_str = "\n".join([f"• @{chat}" for chat in data.get('chats', [])])
     text = (
         f"➕ Новая программа: \"{data['name']}\"\n\n"
-        f"Шаг 4 из 4: Настройки\n\n"
+        f"⚙️ Шаг 4 из 4: Подтверждение\n\n"
         "Текущие настройки:\n"
-        "• Минимальный скор: 5\n"
-        "• Лидов за запуск: макс 20\n"
-        "• Web-обогащение: выкл\n"
-        "• Расписание: ежедневно в 09:00\n\n"
-        "Чаты для парсинга:\n"
+        "• 🏆 Минимальный скор: 5\n"
+        "• 👥 Лидов за запуск: макс 20\n"
+        "• 🌐 Web-обогащение: выкл\n"
+        "• ⏰ Расписание: ежедневно в 09:00\n\n"
+        "💬 Чаты для парсинга:\n"
         f"{chats_list_str}"
     )
     await message.answer(text, reply_markup=get_confirmation_keyboard())
@@ -142,9 +142,9 @@ async def back_to_niche_description(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     await callback.message.edit_text(
         f"➕ Новая программа: \"{data['name']}\"\n\n"
-        "Шаг 2 из 4: Описание ниши\n\n"
-        "Опиши, кого ищем. Это поможет лучше квалифицировать лидов.\n\n"
-        "Например: \"селлеры wildberries и ozon, малый бизнес, ищут автоматизацию\"",
+        "🎯 Шаг 2 из 4: Описание ниши\n\n"
+        "Опиши, кого ищем — это поможет точнее квалифицировать лидов.\n\n"
+        "💡 Например: «селлеры wildberries и ozon, малый бизнес, ищут автоматизацию»",
         reply_markup=get_step_keyboard(back_callback="name")
     )
 
@@ -155,10 +155,10 @@ async def back_to_chats(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     await callback.message.edit_text(
         f"➕ Новая программа: \"{data['name']}\"\n\n"
-        "Шаг 3 из 4: Чаты для парсинга\n\n"
+        "💬 Шаг 3 из 4: Чаты для парсинга\n\n"
         "Отправь список чатов, из которых собирать лидов.\n"
         "Можно несколько в одном сообщении, каждый с новой строки.\n\n"
-        "Формат: `@username` или `t.me/username`",
+        "📌 Формат: `@username` или `t.me/username`",
         reply_markup=get_step_keyboard(back_callback="niche_description")
     )
 
@@ -205,12 +205,12 @@ async def save_program(callback: CallbackQuery, state: FSMContext, session: Asyn
     
     chats_count = len(data.get('chats', []))
     await callback.message.edit_text(
-        "✅ Программа создана!\n\n"
+        "🎉 Программа создана!\n\n"
         f"📁 {new_program.name}\n"
-        f"• {chats_count} чата(ов)\n"
-        f"• Скор ≥{new_program.min_score}\n"
-        f"• Запуск: ежедневно в {new_program.schedule_time}\n\n"
-        "Первый автозапуск: завтра в 09:00",
+        f"• 💬 {chats_count} чата(ов)\n"
+        f"• 🏆 Скор ≥{new_program.min_score}\n"
+        f"• ⏰ Запуск: ежедневно в {new_program.schedule_time}\n\n"
+        "🔜 Первый автозапуск: завтра в 09:00",
         reply_markup=get_main_menu_keyboard() # Go back to main menu
     )
     await callback.answer("Программа успешно создана!")
@@ -224,4 +224,4 @@ async def cancel_creation(callback: CallbackQuery, state: FSMContext):
         MAIN_MENU_TEXT,
         reply_markup=get_main_menu_keyboard()
     )
-    await callback.answer("Создание программы отменено.")
+    await callback.answer("❌ Создание программы отменено.")
