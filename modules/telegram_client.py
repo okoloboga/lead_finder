@@ -18,7 +18,7 @@ class TelegramAuthManager:
     def get_instance(cls):
         if cls._client is None:
             cls._client = TelegramClient(
-                'lead_finder_session',
+                'leadsense_session',
                 config.TELEGRAM_API_ID,
                 config.TELEGRAM_API_HASH,
                 # The connection is managed manually now

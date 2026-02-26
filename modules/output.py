@@ -190,7 +190,7 @@ def initialize_markdown_file(filepath: str, niche: str) -> None:
         return  # Header already exists
 
     report_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    header = f"# 🎯 Lead Finder Report\n\n"
+    header = f"# 🎯 LeadSense Report\n\n"
     header += f"**Дата:** {report_date}\n"
     header += f"**Источник:** {niche}\n\n"
     header += "### Легенда\n"

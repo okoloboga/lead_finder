@@ -1,6 +1,6 @@
-# Lead Finder
+# LeadSense
 
-Lead Finder is a Telegram bot for finding and qualifying B2B leads from Telegram chats.
+LeadSense is a Telegram bot for finding and qualifying B2B leads from Telegram chats.
 It is designed for agencies/freelancers who sell automation services (Telegram bots, AI assistants, workflow integrations).
 
 ## What It Does
@@ -158,7 +158,7 @@ Required GitHub repository secrets:
 - `DEPLOY_HOST` (server IP/domain)
 - `DEPLOY_USER` (SSH user)
 - `DEPLOY_SSH_KEY` (private key in PEM/OpenSSH format)
-- `DEPLOY_PATH` (absolute path to project on server, e.g. `/opt/lead_finder`)
+- `DEPLOY_PATH` (absolute path to project on server, e.g. `/opt/leadsense`)
 
 Optional secrets:
 - `DEPLOY_PORT` (default `22`)

@@ -2,7 +2,7 @@ from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 MAIN_MENU_TEXT = """
-🎯 Lead Finder
+🎯 LeadSense
 
 Нахожу потенциальных клиентов в Telegram-чатах
 и присылаю тебе готовые карточки для аутрича.

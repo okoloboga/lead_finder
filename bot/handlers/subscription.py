@@ -104,7 +104,7 @@ async def buy_subscription_handler(
         return
 
     price = STARS_PRICES[period_key]
-    title = f"Lead Finder — подписка {_period_label(period_key)}"
+    title = f"LeadSense — подписка {_period_label(period_key)}"
     payload = f"subscription:{user.telegram_id}:{period_key}"
 
     await callback.message.answer_invoice(

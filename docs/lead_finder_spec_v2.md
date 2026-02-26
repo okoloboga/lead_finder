@@ -1,4 +1,4 @@
-# Lead Finder v2 — Дополнение к ТЗ
+# LeadSense v2 — Дополнение к ТЗ
 
 ## Изменение концепции
 
@@ -291,7 +291,7 @@ python main.py parse @chat1 @chat2 @chat3 --enrich --max-leads 100---
 
 ## Структура проекта v2
 
-lead_finder/
+leadsense/
 ├── main.py                    # CLI интерфейс
 ├── config.py                  # Конфигурация
 │

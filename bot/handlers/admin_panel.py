@@ -57,7 +57,7 @@ async def _render_admin_dashboard(session: AsyncSession) -> str:
     total_clusters = (await session.execute(select(func.count(PainCluster.id)))).scalar_one()
 
     return (
-        "📊 Админка Lead Finder\n"
+        "📊 Админка LeadSense\n"
         "━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👥 Пользователи: {total_users}\n"
         f"├ С подпиской: {paid_users}\n"

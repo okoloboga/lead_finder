@@ -1,4 +1,4 @@
-# Lead Finder — Техническое задание
+# LeadSense — Техническое задание
 
 ## Обзор проекта
 
@@ -227,7 +227,7 @@
 ## Структура проекта
 
 ```
-lead_finder/
+leadsense/
 ├── main.py                 # Точка входа, CLI интерфейс
 ├── config.py               # Конфигурация и API ключи
 ├── modules/
@@ -377,7 +377,7 @@ aiohttp>=3.9.0       # Async HTTP (для Telethon)
 ## Формат Markdown-отчёта
 
 ```markdown
-# Lead Finder Report
+# LeadSense Report
 **Дата:** 2024-01-15 14:30
 **Ниша:** Селлеры Wildberries
 **Найдено лидов:** 12
