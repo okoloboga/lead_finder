@@ -8,13 +8,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 async def main():
     """
     This script performs a one-time interactive login to create a valid
-    Telethon session file (`leadsense_session.session`).
+    Telethon session file (`leadcore_session.session`).
 
     Run this script directly on your local machine (not in Docker).
     Telethon will prompt you to enter your phone number, the code you receive,
     and your 2FA password (if you have one) directly in the console.
 
-    Once the `leadsense_session.session` file is created, the main bot
+    Once the `leadcore_session.session` file is created, the main bot
     application running inside Docker will be able to use it without needing
     to log in again.
     """
@@ -31,7 +31,7 @@ async def main():
     # Verify authorization after attempting to start
     if await client.is_user_authorized():
         print("\nSuccessfully connected and authorized!")
-        print("A 'leadsense_session.session' file has been created/updated.")
+        print("A 'leadcore_session.session' file has been created/updated.")
         print("You can now stop this script (Ctrl+C) and run the main bot with 'docker compose up --build -d'.")
     else:
         print("\nSomething went wrong during authorization. Please check your credentials and try again.")
