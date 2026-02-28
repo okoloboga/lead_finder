@@ -73,7 +73,6 @@ async def admin_panel_command(
     message: Message, session: AsyncSession, state: FSMContext
 ) -> None:
     if not _is_admin(message.from_user.id):
-        await message.answer("Доступ запрещен.")
         return
     await state.clear()
     text = await _render_admin_dashboard(session)
@@ -85,7 +84,7 @@ async def admin_panel_callback(
     callback: CallbackQuery, session: AsyncSession, state: FSMContext
 ) -> None:
     if not _is_admin(callback.from_user.id):
-        await callback.answer("Доступ запрещен.", show_alert=True)
+        await callback.answer()
         return
     await state.clear()
     text = await _render_admin_dashboard(session)
@@ -96,7 +95,7 @@ async def admin_panel_callback(
 @router.callback_query(F.data == "admin_find_user")
 async def admin_find_user(callback: CallbackQuery, state: FSMContext) -> None:
     if not _is_admin(callback.from_user.id):
-        await callback.answer("Доступ запрещен.", show_alert=True)
+        await callback.answer()
         return
     await state.set_state(AdminPanel.waiting_user_query)
     builder = InlineKeyboardBuilder()
@@ -165,7 +164,7 @@ async def admin_grant_subscription(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
     if not _is_admin(callback.from_user.id):
-        await callback.answer("Доступ запрещен.", show_alert=True)
+        await callback.answer()
         return
     parts = callback.data.split("_")
     if len(parts) != 4:
@@ -196,7 +195,7 @@ async def admin_user_programs(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
     if not _is_admin(callback.from_user.id):
-        await callback.answer("Доступ запрещен.", show_alert=True)
+        await callback.answer()
         return
     try:
         user_id = int(callback.data.split("_")[-1])

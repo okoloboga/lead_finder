@@ -14,3 +14,12 @@ __pycache__/
 output/
 logs/
 venv/
+.venv/
+.venv312/
+
+# Tests and coverage
+tests/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
