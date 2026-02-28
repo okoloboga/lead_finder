@@ -145,6 +145,13 @@ Run bot locally:
 python run_bot.py
 ```
 
+Run tests:
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+pytest
+```
+
 For production-like usage, Docker Compose is recommended.
 
 ## CI/CD Auto Deploy (GitHub Actions -> Server)

@@ -85,7 +85,7 @@ async def _touch_user(user, session: AsyncSession) -> User:
     existing = (
         await session.execute(select(User).where(User.telegram_id == user.id))
     ).scalars().first()
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
     if existing:
         existing.username = user.username
         existing.last_active_at = now
@@ -274,7 +274,7 @@ async def save_services_description_handler(
 
     user = await _touch_user(message.from_user, session)
     user.services_description = description
-    user.last_active_at = datetime.datetime.utcnow()
+    user.last_active_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
     await session.commit()
 
     data = await state.get_data()

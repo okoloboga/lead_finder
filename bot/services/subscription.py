@@ -22,7 +22,7 @@ STARS_PRICES = {
 
 
 def _utc_now() -> datetime.datetime:
-    return datetime.datetime.utcnow()
+    return datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
 
 
 def normalize_subscription(user: User) -> None:
