@@ -1,0 +1,2 @@
+[console_scripts]
+fluentogram = fluentogram.cli.main:cli
