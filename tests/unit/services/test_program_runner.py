@@ -387,3 +387,113 @@ async def test_save_pains_from_lead_deduplicates_and_sanitizes(user_factory) -> 
     assert pain.source_chat == "chat_a"
     assert pain.source_user_id is None
     assert pain.business_type == "Retail"
+
+
+@pytest.mark.unit
+def test_extract_pain_texts_and_trim_helpers() -> None:
+    result = pr._extract_pain_texts(
+        {
+            "identified_pains": [
+                "  text pain  ",
+                {"pain": "dict pain"},
+                {"description": "desc pain"},
+                {"text": "txt pain"},
+                {"unknown": "x"},
+                123,
+                "",
+            ]
+        }
+    )
+    assert result == ["text pain", "dict pain", "desc pain", "txt pain"]
+
+    assert pr._trim("  abc  ", 2) == "ab"
+    assert pr._trim("   ", 10) is None
+    assert pr._trim(None, 10) is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_enrich_candidate_paths(monkeypatch) -> None:
+    async def _tg(username):  # noqa: ANN001
+        return {"entity_data": {"username": username}}
+
+    monkeypatch.setattr(pr.telegram_enricher, "enrich_with_telegram_data", _tg)
+    monkeypatch.setattr(
+        pr.web_enricher,
+        "enrich_with_web_search",
+        lambda candidate: {"q": candidate["username"]},
+    )
+
+    enriched = await pr._enrich_candidate(
+        {
+            "username": "alice",
+            "has_channel": True,
+            "channel_username": "alice_channel",
+        },
+        enrich_web=True,
+    )
+    assert enriched["channel_data"]["entity_data"]["username"] == "alice_channel"
+    assert enriched["web_search_data"]["q"] == "alice"
+
+    not_enriched = await pr._enrich_candidate(
+        {"username": "bob", "has_channel": False}, enrich_web=False
+    )
+    assert not_enriched == {}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_save_pains_from_lead_empty_inputs(user_factory) -> None:
+    user = user_factory(telegram_id=20)
+    session = _FakeSession(user=user)
+
+    no_pains = await pr._save_pains_from_lead(
+        user_id=20,
+        program_id=1,
+        candidate={"messages_with_metadata": [{"message_id": 1, "text": "x"}]},
+        qualification_result={"identified_pains": []},
+        session=session,
+    )
+    assert no_pains == 0
+
+    no_messages = await pr._save_pains_from_lead(
+        user_id=20,
+        program_id=1,
+        candidate={"messages_with_metadata": []},
+        qualification_result={"identified_pains": ["pain"]},
+        session=session,
+    )
+    assert no_messages == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_save_pains_from_lead_skips_existing(user_factory) -> None:
+    user = user_factory(telegram_id=21)
+    session = _FakeSession(user=user)
+    session.pains.append(
+        Pain(
+            user_id=21,
+            program_id=2,
+            text="existing",
+            original_quote="quote",
+            category="other",
+            intensity="medium",
+            source_chat="chat",
+            source_message_id=5,
+        )
+    )
+
+    inserted = await pr._save_pains_from_lead(
+        user_id=21,
+        program_id=2,
+        candidate={
+            "username": "u",
+            "source_chat_username": "chat",
+            "messages_with_metadata": [{"message_id": 5, "text": "quote", "link": None}],
+        },
+        qualification_result={"identified_pains": ["new pain"]},
+        session=session,
+    )
+
+    assert inserted == 0
