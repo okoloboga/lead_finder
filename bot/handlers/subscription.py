@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 _PERIOD_LABELS = {"1m": "1 мес", "3m": "3 мес", "6m": "6 мес", "12m": "12 мес"}
-_PERIOD_DISCOUNTS = {"1m": None, "3m": 16, "6m": 33, "12m": 60}
+_PERIOD_DISCOUNTS = {"1m": None, "3m": 20, "6m": 33, "12m": 42}
 
 
 def _period_label(period_key: str) -> str:
