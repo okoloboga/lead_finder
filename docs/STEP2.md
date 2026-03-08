@@ -560,7 +560,8 @@ Telegram-бот для автоматического сбора и достав
 
 ### Scheduler
 - APScheduler для запуска по расписанию
-- Async jobs
+- Scheduler не выполняет тяжёлый пайплайн внутри процесса бота, а ставит задачу в очередь Celery
+- Celery worker выполняет пайплайн в фоне и отправляет результаты пользователю
 - Логирование каждого запуска
 
 ### LeadCore Core
@@ -568,8 +569,8 @@ Telegram-бот для автоматического сбора и достав
 - Интеграция как библиотека
 
 ### Database
-- SQLite для начала (можно PostgreSQL позже)
-- Таблицы: users, programs, program_chats, leads, sent_leads, run_logs
+- PostgreSQL (основная БД)
+- Таблицы: users, programs, program_chats, leads, pains, pain_clusters, generated_posts, run_logs
 
 ### Хостинг
 - Docker-контейнер

@@ -18,21 +18,25 @@ It is designed for agencies/freelancers who sell automation services (Telegram b
 - `aiogram` bot UI and handlers
 - `Telethon` for Telegram parsing/auth session
 - `SQLAlchemy + PostgreSQL` for storage
-- `APScheduler` for scheduled jobs
-- `Celery + Redis` for queued background pipeline execution
+- `APScheduler` for scheduling trigger time (enqueue only)
+- `Celery + Redis` for background pipeline execution in worker
 - `CometAPI` (OpenAI-compatible) for LLM calls
 - `Google Custom Search API` for web enrichment/best-practice context
 
 Main entrypoint: `run_bot.py`
 
+Execution model:
+- bot process: receives updates and schedules runs
+- scheduler job: enqueues Celery task only (non-blocking)
+- worker process: executes parsing/qualification pipeline and sends lead cards
+
 ## Repository Structure
 
-- `bot/` — bot app, handlers, scheduler, DB models
+- `bot/` — bot app, handlers, scheduler, Celery tasks, DB models
 - `modules/` — parsing, qualification, pain clustering, content generation
 - `prompts/` — prompt templates
 - `docs/` — product specs and implementation notes
 - `run_bot.py` — bot launcher
-- `docker-compose.yml` — app + postgres services
 - `docker-compose.yml` — app + worker + redis + postgres services
 
 ## Prerequisites
@@ -77,6 +81,9 @@ Useful runtime settings:
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
 - `CELERY_WORKER_CONCURRENCY`
+
+Worker mode (important):
+- Celery worker is configured with `--pool=solo` for async SQLAlchemy/asyncpg stability.
 
 ## Quick Start (Docker)
 
@@ -136,6 +143,10 @@ This creates/updates Telethon session file, then Dockerized app can reuse it.
 - No pains/clusters shown: ensure program has qualified leads and run completed successfully.
 - Callback timeout errors (`query is too old`): update to latest code (callback ack is handled early).
 - DB errors about schema/constraints: restart app after pulling latest updates so startup migrations run.
+- `(sqlalchemy...InterfaceError) cannot perform operation: another operation is in progress` in worker:
+  - Cause: asyncpg connection state reused across process boundaries or prefork pool issues.
+  - Fix in current code: process-bound SQLAlchemy engine rebind in Celery worker + `--pool=solo`.
+  - Action: rebuild/restart `worker` (`docker compose up -d --build worker`).
 
 ## Development
 
@@ -155,7 +166,10 @@ Run tests:
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
-pytest
+PYTHONPATH=. pytest
+
+# Unit tests used in CI:
+PYTHONPATH=. pytest -m unit --cov=bot.services.subscription --cov-report=term-missing
 ```
 
 For production-like usage, Docker Compose is recommended.
