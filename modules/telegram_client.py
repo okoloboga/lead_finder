@@ -28,11 +28,21 @@ class TelegramAuthManager:
 
     @classmethod
     async def get_client(cls) -> TelegramClient:
-        instance = cls.get_instance()
-        if not instance._client.is_connected():
-            logger.info("Connecting to Telegram...")
-            await instance._client.connect()
-        return instance._client
+        cls.get_instance()
+        if not cls._client.is_connected():
+            # Create a fresh client bound to the current event loop.
+            # Each asyncio.run() (e.g. Celery task) creates a new loop,
+            # so the old client would raise "event loop must not change".
+            # Session is file-based — authorization is preserved across instances.
+            cls._client = TelegramClient(
+                'leadcore_session',
+                config.TELEGRAM_API_ID,
+                config.TELEGRAM_API_HASH,
+                auto_reconnect=True,
+            )
+            logger.info("Connecting to Telegram (fresh client for current event loop)...")
+            await cls._client.connect()
+        return cls._client
 
     @classmethod
     async def is_authorized(cls) -> bool:
