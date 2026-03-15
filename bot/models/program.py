@@ -27,7 +27,7 @@ class Program(Base):
     
     # Schedule
     schedule_time: Mapped[str] = mapped_column(String(5), default="09:00")  # HH:MM format
-    auto_collect_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_collect_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Telegram chat ID for scheduler notifications
     owner_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

@@ -196,7 +196,7 @@ async def save_program(callback: CallbackQuery, state: FSMContext, session: Asyn
         user_id=callback.from_user.id,
         name=data['name'],
         niche_description=data['niche_description'],
-        auto_collect_enabled=True,
+        auto_collect_enabled=False,
         owner_chat_id=owner_chat_id,
     )
 
