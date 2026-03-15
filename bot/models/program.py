@@ -22,7 +22,7 @@ class Program(Base):
     
     # Settings
     min_score: Mapped[int] = mapped_column(Integer, default=2)
-    max_leads_per_run: Mapped[int] = mapped_column(Integer, default=20)
+    max_leads_per_run: Mapped[int] = mapped_column(Integer, default=50)
     enrich: Mapped[bool] = mapped_column(Boolean, default=False)
     
     # Schedule

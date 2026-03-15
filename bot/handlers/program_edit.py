@@ -365,7 +365,7 @@ async def set_min_score(callback: CallbackQuery, state: FSMContext):
     text = (
         f"⚙️ Настройки программы\n\n"
         f"Минимальный скор: {new_score}\n"
-        f"Лидов за запуск: {data.get('max_leads', 20)}\n"
+        f"Лидов за запуск: {data.get('max_leads', 50)}\n"
         f"Web-обогащение: {'Вкл' if data.get('enrich', False) else 'Выкл'}\n"
         f"Автосбор по расписанию: "
         f"{'Вкл' if data.get('auto_collect', True) else 'Выкл'}"
@@ -374,7 +374,7 @@ async def set_min_score(callback: CallbackQuery, state: FSMContext):
     keyboard = get_settings_keyboard(
         program_id,
         new_score,
-        data.get('max_leads', 20),
+        data.get('max_leads', 50),
         data.get('enrich', False),
         data.get('auto_collect', True),
     )
@@ -424,7 +424,7 @@ async def toggle_enrichment(callback: CallbackQuery, state: FSMContext):
     text = (
         f"⚙️ Настройки программы\n\n"
         f"Минимальный скор: {data.get('min_score', 5)}\n"
-        f"Лидов за запуск: {data.get('max_leads', 20)}\n"
+        f"Лидов за запуск: {data.get('max_leads', 50)}\n"
         f"Web-обогащение: {'Вкл' if new_enrich else 'Выкл'}\n"
         f"Автосбор по расписанию: "
         f"{'Вкл' if data.get('auto_collect', True) else 'Выкл'}"
@@ -433,7 +433,7 @@ async def toggle_enrichment(callback: CallbackQuery, state: FSMContext):
     keyboard = get_settings_keyboard(
         program_id,
         data.get('min_score', 5),
-        data.get('max_leads', 20),
+        data.get('max_leads', 50),
         new_enrich,
         data.get('auto_collect', True),
     )
@@ -453,7 +453,7 @@ async def toggle_auto_collect(callback: CallbackQuery, state: FSMContext):
     text = (
         f"⚙️ Настройки программы\n\n"
         f"Минимальный скор: {data.get('min_score', 5)}\n"
-        f"Лидов за запуск: {data.get('max_leads', 20)}\n"
+        f"Лидов за запуск: {data.get('max_leads', 50)}\n"
         f"Web-обогащение: {'Вкл' if data.get('enrich', False) else 'Выкл'}\n"
         f"Автосбор по расписанию: {'Вкл' if new_auto_collect else 'Выкл'}"
     )
@@ -461,7 +461,7 @@ async def toggle_auto_collect(callback: CallbackQuery, state: FSMContext):
     keyboard = get_settings_keyboard(
         program_id,
         data.get('min_score', 5),
-        data.get('max_leads', 20),
+        data.get('max_leads', 50),
         data.get('enrich', False),
         new_auto_collect,
     )
@@ -483,7 +483,7 @@ async def save_settings(callback: CallbackQuery, state: FSMContext, session: Asy
 
     if program:
         program.min_score = data.get('min_score', 5)
-        program.max_leads_per_run = data.get('max_leads', 20)
+        program.max_leads_per_run = data.get('max_leads', 50)
         program.enrich = data.get('enrich', False)
         auto_collect = data.get('auto_collect', program.auto_collect_enabled)
         program.auto_collect_enabled = auto_collect
