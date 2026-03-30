@@ -89,6 +89,19 @@ class TelegramAuthManager:
             raise
     
     @classmethod
+    def force_reset(cls) -> None:
+        """Synchronously reset client state.
+
+        Must be called before each asyncio.run() in Celery tasks.
+        is_connected() returns True even after the event loop closes, so the
+        old client (bound to the closed loop) would be reused otherwise,
+        causing 'event loop must not change after connection'.
+        """
+        cls._client = None
+        cls._phone_code_hash = None
+        cls._phone = None
+
+    @classmethod
     async def disconnect(cls):
         if cls._client and cls._client.is_connected():
             logger.info("Disconnecting Telegram client...")

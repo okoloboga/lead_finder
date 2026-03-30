@@ -52,6 +52,20 @@ def ensure_engine_process_bound() -> bool:
     return True
 
 
+def rebind_engine() -> None:
+    """Always recreate engine and sessionmaker.
+
+    Must be called before each asyncio.run() in Celery tasks.
+    asyncio.run() creates a new event loop each invocation; asyncpg pool
+    connections are tied to the previous (now closed) loop, causing
+    'Future attached to a different loop' on reuse.
+    """
+    global engine, _ENGINE_PID
+    engine = _create_engine()
+    async_session.configure(bind=engine)
+    _ENGINE_PID = os.getpid()
+
+
 async def dispose_engine() -> None:
     """Best-effort async engine disposal."""
     await engine.dispose()
