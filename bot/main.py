@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import select
 
+from bot.bot_factory import create_bot
 from bot.db_config import engine, async_session
 from bot.handlers import (
     start,
@@ -60,7 +61,7 @@ async def main(bot_token: str) -> None:
     """Bot entry point."""
     await create_tables()
 
-    bot = Bot(token=bot_token, parse_mode="HTML")
+    bot = create_bot(bot_token)
     dp = Dispatcher(
         storage=MemoryStorage(),
         bot=bot,

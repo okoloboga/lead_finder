@@ -1,4 +1,6 @@
 import os
+from urllib.parse import urlparse
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,6 +24,27 @@ TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
 TELEGRAM_PHONE = os.getenv("TELEGRAM_PHONE")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+# Optional proxy for all Telegram traffic (Bot API and MTProto).
+# Example: "http://xray_proxy:10809". Empty value means a direct connection.
+TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY", "").strip()
+
+
+def get_telethon_proxy() -> dict | None:
+    """Returns TELEGRAM_PROXY as a Telethon proxy dict, or None if unset."""
+    if not TELEGRAM_PROXY:
+        return None
+
+    parsed = urlparse(TELEGRAM_PROXY)
+    proxy = {
+        "proxy_type": parsed.scheme,
+        "addr": parsed.hostname,
+        "port": parsed.port,
+    }
+    if parsed.username:
+        proxy["username"] = parsed.username
+        proxy["password"] = parsed.password
+    return proxy
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/1")
 CELERY_WORKER_CONCURRENCY = int(os.getenv("CELERY_WORKER_CONCURRENCY", 1))

@@ -100,7 +100,7 @@ class _FakeDispatcher:
 
 
 class _FakeBot:
-    def __init__(self, token: str, parse_mode: str):  # noqa: ARG002
+    def __init__(self, token: str):
         self.token = token
         self.webhook_deleted = False
 
@@ -124,7 +124,7 @@ async def test_main_wires_dispatcher_and_starts_polling(monkeypatch) -> None:
 
     fake_dp = _FakeDispatcher()
     monkeypatch.setattr(bot_main, "Dispatcher", lambda **kwargs: fake_dp)
-    monkeypatch.setattr(bot_main, "Bot", _FakeBot)
+    monkeypatch.setattr(bot_main, "create_bot", _FakeBot)
 
     fake_scheduler = SimpleNamespace(
         start=lambda: calls.__setitem__("scheduler_start", calls["scheduler_start"] + 1),

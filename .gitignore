@@ -22,3 +22,6 @@ venv/
 .coverage
 coverage/
 htmlcov/
+
+# Proxy tunnel credentials
+xray-config.json

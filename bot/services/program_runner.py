@@ -8,6 +8,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 import config
+from bot.bot_factory import create_bot
 from bot.db_config import async_session
 from bot.models.program import Program
 from bot.models.lead import Lead
@@ -363,7 +364,7 @@ async def run_program_job(program_id: int, chat_id: int) -> None:
     Creates its own Bot instance for safe isolated execution.
     """
     logger.info(f"[JOB] Starting job for program_id={program_id}, user_chat_id={chat_id}")
-    bot = Bot(token=config.TELEGRAM_BOT_TOKEN, parse_mode="HTML")
+    bot = create_bot(config.TELEGRAM_BOT_TOKEN)
     try:
         async with _PIPELINE_SEMAPHORE:
             await _run_program_job_inner(bot, program_id, chat_id)

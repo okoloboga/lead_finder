@@ -22,7 +22,8 @@ class TelegramAuthManager:
                 config.TELEGRAM_API_ID,
                 config.TELEGRAM_API_HASH,
                 # The connection is managed manually now
-                auto_reconnect=True
+                auto_reconnect=True,
+                proxy=config.get_telethon_proxy(),
             )
         return cls
 
@@ -39,6 +40,7 @@ class TelegramAuthManager:
                 config.TELEGRAM_API_ID,
                 config.TELEGRAM_API_HASH,
                 auto_reconnect=True,
+                proxy=config.get_telethon_proxy(),
             )
             logger.info("Connecting to Telegram (fresh client for current event loop)...")
             await cls._client.connect()
