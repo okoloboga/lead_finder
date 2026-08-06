@@ -101,7 +101,7 @@ async def test_run_program_handler_user_missing() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_run_program_handler_free_limit_block(monkeypatch) -> None:
+async def test_run_program_handler_trial_over_block(monkeypatch) -> None:
     callback = FakeCallback(FakeUser(id=1, language_code="en"), data="run_program_7")
     session = _Session()
     session.queue.append(_Result(scalar_or_none=7))
@@ -109,14 +109,14 @@ async def test_run_program_handler_free_limit_block(monkeypatch) -> None:
 
     monkeypatch.setattr(
         program_view,
-        "check_weekly_analysis_limit",
-        lambda user: (False, 3),  # noqa: ARG005
+        "has_full_access",
+        lambda user: False,  # noqa: ARG005
     )
 
     await program_view.run_program_handler(callback, session)
 
     assert callback.answers[-1][1] is True
-    assert "Next run available in 3 day(s)" in callback.answers[-1][0]
+    assert "free trial week is over" in callback.answers[-1][0]
 
 
 @pytest.mark.unit
@@ -129,8 +129,8 @@ async def test_run_program_handler_success(monkeypatch) -> None:
 
     monkeypatch.setattr(
         program_view,
-        "check_weekly_analysis_limit",
-        lambda user: (True, 0),  # noqa: ARG005
+        "has_full_access",
+        lambda user: True,  # noqa: ARG005
     )
     scheduled = {}
 

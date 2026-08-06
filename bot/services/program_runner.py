@@ -15,7 +15,11 @@ from bot.models.lead import Lead
 from bot.models.pain import Pain
 from bot.models.user import User
 from bot.ui.lead_card import format_lead_card, get_lead_card_keyboard
-from bot.services.subscription import check_weekly_analysis_limit, mark_analysis_started
+from bot.services.subscription import (
+    TRIAL_OVER_MESSAGE,
+    has_full_access,
+    mark_analysis_started,
+)
 from modules.telegram_client import AuthorizationRequiredError
 from modules import members_parser, qualifier
 from modules.pain_clusterer import cluster_new_pains
@@ -399,12 +403,10 @@ async def _run_program_job_inner(bot: Bot, program_id: int, chat_id: int) -> Non
             )
             return
 
-        can_run, days_left = check_weekly_analysis_limit(user)
-        if not can_run:
+        if not has_full_access(user):
             await bot.send_message(
                 chat_id,
-                "⏸ Запуск пропущен: на бесплатном тарифе доступен 1 анализ в неделю. "
-                f"Следующий запуск через {days_left} дн.",
+                f"⏸ Запуск пропущен. {TRIAL_OVER_MESSAGE}",
             )
             return
 

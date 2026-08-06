@@ -190,14 +190,15 @@ async def test_save_program_limit_blocked(monkeypatch) -> None:
     await state.update_data(name="P", niche_description="N", chats=["chat1"])
     session = _Session(users={10: User(telegram_id=10, username="u")})
 
-    async def _limit(sess, user):  # noqa: ANN001
-        return False, "limit reached"
-
-    monkeypatch.setattr(program_create, "check_program_limit", _limit)
+    monkeypatch.setattr(
+        program_create,
+        "has_full_access",
+        lambda user: False,  # noqa: ARG005
+    )
 
     await program_create.save_program(callback, state, session)
 
-    assert callback.answers[-1] == ("limit reached", True)
+    assert callback.answers[-1] == (program_create.TRIAL_OVER_MESSAGE, True)
 
 
 @pytest.mark.unit
@@ -213,11 +214,12 @@ async def test_save_program_success(monkeypatch) -> None:
     )
     session = _Session(users={11: User(telegram_id=11, username="u")})
 
-    async def _limit_ok(sess, user):  # noqa: ANN001
-        return True, ""
-
     scheduled: list[tuple[int, int, str]] = []
-    monkeypatch.setattr(program_create, "check_program_limit", _limit_ok)
+    monkeypatch.setattr(
+        program_create,
+        "has_full_access",
+        lambda user: True,  # noqa: ARG005
+    )
     monkeypatch.setattr(
         program_create,
         "schedule_program_job",

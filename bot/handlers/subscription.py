@@ -9,9 +9,10 @@ from bot.models.user import User
 from bot.services.subscription import (
     STARS_PRICES,
     activate_paid_subscription,
-    check_weekly_analysis_limit,
     is_paid_user,
+    is_trial_active,
     normalize_subscription,
+    trial_days_left,
 )
 from bot.i18n import get_locale, pick
 from bot.ui.main_menu import get_main_menu_keyboard
@@ -53,24 +54,23 @@ def _subscription_menu_keyboard(language_code: str | None) -> object:
 
 def _render_subscription_text(user: User) -> str:
     normalize_subscription(user)
-    paid = is_paid_user(user)
-    if paid and user.subscription_expires_at:
+    if is_paid_user(user) and user.subscription_expires_at:
         status = f"💚 Paid до {user.subscription_expires_at.strftime('%d.%m.%Y')}"
-        programs_limit = "♾ Безлимит"
-        analyses_limit = "♾ Безлимит"
+        access = "♾ Полный доступ"
+    elif is_trial_active(user):
+        status = f"🎁 Пробная неделя — осталось {trial_days_left(user)} дн."
+        access = "♾ Полный доступ"
     else:
-        status = "🆓 Free"
-        programs_limit = "1"
-        can_run, _ = check_weekly_analysis_limit(user)
-        analyses_limit = "0/1 ⏳" if not can_run else "1/1 ✅"
+        status = "🔒 Пробная неделя закончилась"
+        access = "🚫 Нужна подписка"
 
     return (
         "💎 Подписка\n"
         "━━━━━━━━━━━\n\n"
         f"Статус: {status}\n\n"
-        "📊 Лимиты:\n"
-        f"• 📁 Программы: {programs_limit}\n"
-        f"• 🔄 Запусков в неделю: {analyses_limit}\n\n"
+        "📊 Доступ:\n"
+        f"• 📁 Программы: {access}\n"
+        f"• 🔄 Запуски анализа: {access}\n\n"
         "⭐ Выберите период для оплаты Telegram Stars:"
     )
 

@@ -13,7 +13,11 @@ from bot.models.user import User
 from bot.ui.main_menu import get_main_menu_keyboard
 from bot.i18n import get_locale, pick
 from bot.tasks import enqueue_program_job
-from bot.services.subscription import check_weekly_analysis_limit
+from bot.services.subscription import (
+    TRIAL_OVER_MESSAGE,
+    TRIAL_OVER_MESSAGE_EN,
+    has_full_access,
+)
 from bot.ui.lead_card import format_lead_card, get_lead_card_keyboard
 from bot.scheduler import remove_program_job
 from sqlalchemy import delete
@@ -144,16 +148,9 @@ async def run_program_handler(callback: CallbackQuery, session: AsyncSession):
         )
         return
 
-    can_run, days_left = check_weekly_analysis_limit(user)
-    if not can_run:
+    if not has_full_access(user):
         await callback.answer(
-            pick(
-                locale,
-                f"На бесплатном тарифе доступен 1 анализ в неделю. "
-                f"Следующий запуск через {days_left} дн.",
-                f"Free tier allows 1 analysis per week. "
-                f"Next run available in {days_left} day(s).",
-            ),
+            pick(locale, TRIAL_OVER_MESSAGE, TRIAL_OVER_MESSAGE_EN),
             show_alert=True,
         )
         return

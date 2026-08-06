@@ -13,20 +13,24 @@ from tests.unit.handlers.helpers import FakeCallback, FakeMessage, FakeSession, 
 
 
 @pytest.mark.unit
-def test_render_subscription_text_free_and_paid() -> None:
-    free_user = User(telegram_id=1, username="u1", subscription_type="free")
+def test_render_subscription_text_trial_paid_and_expired() -> None:
+    trial_user = User(telegram_id=1, username="u1", subscription_type="free")
     paid_user = User(
         telegram_id=2,
         username="u2",
         subscription_type="paid",
         subscription_expires_at=datetime.datetime(2026, 12, 31, 0, 0, 0),
     )
+    expired_user = User(
+        telegram_id=3,
+        username="u3",
+        subscription_type="free",
+        created_at=datetime.datetime(2020, 1, 1, 0, 0, 0),
+    )
 
-    free_text = sub_h._render_subscription_text(free_user)
-    paid_text = sub_h._render_subscription_text(paid_user)
-
-    assert "🆓 Free" in free_text
-    assert "💚 Paid" in paid_text
+    assert "Пробная неделя —" in sub_h._render_subscription_text(trial_user)
+    assert "💚 Paid" in sub_h._render_subscription_text(paid_user)
+    assert "закончилась" in sub_h._render_subscription_text(expired_user)
 
 
 @pytest.mark.unit

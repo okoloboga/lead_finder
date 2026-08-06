@@ -21,7 +21,9 @@ def user_factory():
         subscription_type: str = "free",
         subscription_expires_at: datetime.datetime | None = None,
         last_analysis_at: datetime.datetime | None = None,
+        created_at: datetime.datetime | None = None,
     ) -> User:
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         return User(
             telegram_id=telegram_id,
             username=username,
@@ -29,8 +31,8 @@ def user_factory():
             subscription_type=subscription_type,
             subscription_expires_at=subscription_expires_at,
             last_analysis_at=last_analysis_at,
-            created_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
-            last_active_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
+            created_at=created_at or now,
+            last_active_at=now,
         )
 
     return _build

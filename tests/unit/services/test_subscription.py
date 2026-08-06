@@ -9,24 +9,6 @@ import pytest
 from bot.services import subscription as sub
 
 
-class _ScalarResult:
-    def __init__(self, value: int) -> None:
-        self._value = value
-
-    def scalar_one(self) -> int:
-        return self._value
-
-
-class _FakeSession:
-    def __init__(self, count: int) -> None:
-        self.count = count
-        self.execute_calls = 0
-
-    async def execute(self, _query):  # noqa: ANN001
-        self.execute_calls += 1
-        return _ScalarResult(self.count)
-
-
 @pytest.mark.unit
 def test_normalize_subscription_expires_paid_user(user_factory) -> None:
     now = datetime.datetime(2026, 2, 28, 12, 0, 0)
@@ -72,96 +54,74 @@ def test_is_paid_user_false_after_expiry(monkeypatch, user_factory) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_check_program_limit_paid_user_bypasses_db(user_factory) -> None:
-    user = user_factory(subscription_type="paid")
-    session = _FakeSession(count=100)
+def test_trial_expires_one_week_after_registration(monkeypatch, user_factory) -> None:
+    now = datetime.datetime(2026, 2, 28, 12, 0, 0)
+    monkeypatch.setattr(sub, "_utc_now", lambda: now)
+    user = user_factory(created_at=now)
 
-    allowed, reason = await sub.check_program_limit(session, user)
-
-    assert allowed is True
-    assert reason is None
-    assert session.execute_calls == 0
+    assert sub.trial_expires_at(user) == now + datetime.timedelta(days=7)
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_check_program_limit_free_user_under_limit(user_factory) -> None:
-    user = user_factory(subscription_type="free")
-    session = _FakeSession(count=0)
+def test_trial_expires_now_for_unflushed_user(monkeypatch, user_factory) -> None:
+    now = datetime.datetime(2026, 2, 28, 12, 0, 0)
+    monkeypatch.setattr(sub, "_utc_now", lambda: now)
+    user = user_factory()
+    user.created_at = None
 
-    allowed, reason = await sub.check_program_limit(session, user)
-
-    assert allowed is True
-    assert reason is None
-    assert session.execute_calls == 1
+    assert sub.is_trial_active(user) is True
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_check_program_limit_free_user_hits_limit(user_factory) -> None:
-    user = user_factory(subscription_type="free")
-    session = _FakeSession(count=1)
+def test_trial_active_on_last_day(monkeypatch, user_factory) -> None:
+    now = datetime.datetime(2026, 2, 28, 12, 0, 0)
+    monkeypatch.setattr(sub, "_utc_now", lambda: now)
+    user = user_factory(created_at=now - datetime.timedelta(days=6, hours=23))
 
-    allowed, reason = await sub.check_program_limit(session, user)
-
-    assert allowed is False
-    assert reason is not None
-    assert "1 программа" in reason
+    assert sub.is_trial_active(user) is True
+    assert sub.has_full_access(user) is True
 
 
 @pytest.mark.unit
-def test_check_weekly_analysis_limit_paid_user(user_factory) -> None:
-    user = user_factory(subscription_type="paid")
+def test_trial_over_after_seven_days(monkeypatch, user_factory) -> None:
+    now = datetime.datetime(2026, 2, 28, 12, 0, 0)
+    monkeypatch.setattr(sub, "_utc_now", lambda: now)
+    user = user_factory(created_at=now - datetime.timedelta(days=7))
 
-    allowed, days_left = sub.check_weekly_analysis_limit(user)
-
-    assert allowed is True
-    assert days_left == 0
-
-
-@pytest.mark.unit
-def test_check_weekly_analysis_limit_no_history(user_factory) -> None:
-    user = user_factory(subscription_type="free", last_analysis_at=None)
-
-    allowed, days_left = sub.check_weekly_analysis_limit(user)
-
-    assert allowed is True
-    assert days_left == 0
+    assert sub.is_trial_active(user) is False
+    assert sub.has_full_access(user) is False
 
 
 @pytest.mark.unit
-def test_check_weekly_analysis_limit_blocks_within_7_days(
-    monkeypatch, user_factory
-) -> None:
+def test_paid_user_keeps_access_after_trial(monkeypatch, user_factory) -> None:
     now = datetime.datetime(2026, 2, 28, 12, 0, 0)
     monkeypatch.setattr(sub, "_utc_now", lambda: now)
     user = user_factory(
-        subscription_type="free",
-        last_analysis_at=now - datetime.timedelta(days=2, hours=1),
+        subscription_type="paid",
+        subscription_expires_at=now + datetime.timedelta(days=30),
+        created_at=now - datetime.timedelta(days=90),
     )
 
-    allowed, days_left = sub.check_weekly_analysis_limit(user)
-
-    assert allowed is False
-    assert days_left == 5
+    assert sub.is_trial_active(user) is False
+    assert sub.has_full_access(user) is True
 
 
 @pytest.mark.unit
-def test_check_weekly_analysis_limit_allows_after_7_days(
-    monkeypatch, user_factory
-) -> None:
+def test_trial_days_left_rounds_up(monkeypatch, user_factory) -> None:
     now = datetime.datetime(2026, 2, 28, 12, 0, 0)
     monkeypatch.setattr(sub, "_utc_now", lambda: now)
-    user = user_factory(
-        subscription_type="free",
-        last_analysis_at=now - datetime.timedelta(days=7),
-    )
+    user = user_factory(created_at=now - datetime.timedelta(days=4, hours=12))
 
-    allowed, days_left = sub.check_weekly_analysis_limit(user)
+    assert sub.trial_days_left(user) == 3
 
-    assert allowed is True
-    assert days_left == 0
+
+@pytest.mark.unit
+def test_trial_days_left_zero_when_over(monkeypatch, user_factory) -> None:
+    now = datetime.datetime(2026, 2, 28, 12, 0, 0)
+    monkeypatch.setattr(sub, "_utc_now", lambda: now)
+    user = user_factory(created_at=now - datetime.timedelta(days=10))
+
+    assert sub.trial_days_left(user) == 0
 
 
 @pytest.mark.unit

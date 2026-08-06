@@ -13,7 +13,7 @@ from bot.ui.main_menu import get_main_menu_keyboard, get_main_menu_text
 from bot.models.program import Program, ProgramChat
 from bot.models.user import User
 from bot.scheduler import schedule_program_job
-from bot.services.subscription import check_program_limit
+from bot.services.subscription import TRIAL_OVER_MESSAGE, has_full_access
 
 router = Router()
 
@@ -186,9 +186,8 @@ async def save_program(callback: CallbackQuery, state: FSMContext, session: Asyn
         )
         return
 
-    allowed, reason = await check_program_limit(session, user)
-    if not allowed:
-        await callback.answer(reason, show_alert=True)
+    if not has_full_access(user):
+        await callback.answer(TRIAL_OVER_MESSAGE, show_alert=True)
         return
 
     owner_chat_id = callback.from_user.id

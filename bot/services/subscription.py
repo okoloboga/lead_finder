@@ -1,9 +1,5 @@
 import datetime
 
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from bot.models.program import Program
 from bot.models.user import User
 
 PAID_PERIODS_MONTHS = {
@@ -19,6 +15,16 @@ STARS_PRICES = {
     "6m": 2000,
     "12m": 3500,
 }
+
+# Free tier is a full-featured trial that starts at registration.
+TRIAL_DAYS = 7
+
+TRIAL_OVER_MESSAGE = (
+    "Пробная неделя закончилась. Оформи подписку, чтобы продолжить."
+)
+TRIAL_OVER_MESSAGE_EN = (
+    "Your free trial week is over. Subscribe to continue."
+)
 
 
 def _utc_now() -> datetime.datetime:
@@ -40,41 +46,29 @@ def is_paid_user(user: User) -> bool:
     return user.subscription_type == "paid"
 
 
-async def check_program_limit(
-    session: AsyncSession, user: User
-) -> tuple[bool, str | None]:
-    if is_paid_user(user):
-        return True, None
-
-    program_count = (
-        await session.execute(
-            select(func.count(Program.id)).where(Program.user_id == user.telegram_id)
-        )
-    ).scalar_one()
-    if program_count >= 1:
-        return (
-            False,
-            "На бесплатном тарифе доступна только 1 программа. "
-            "Оформи подписку, чтобы снять лимит.",
-        )
-    return True, None
+def trial_expires_at(user: User) -> datetime.datetime:
+    """Returns the moment the free trial week ends."""
+    # created_at is filled on insert, so a not-yet-flushed user starts now.
+    created_at = user.created_at or _utc_now()
+    return created_at + datetime.timedelta(days=TRIAL_DAYS)
 
 
-def check_weekly_analysis_limit(user: User) -> tuple[bool, int]:
-    if is_paid_user(user):
-        return True, 0
+def is_trial_active(user: User) -> bool:
+    """Whether the user is still inside the free trial week."""
+    return _utc_now() < trial_expires_at(user)
 
-    if not user.last_analysis_at:
-        return True, 0
 
-    delta = _utc_now() - user.last_analysis_at
-    if delta >= datetime.timedelta(days=7):
-        return True, 0
+def trial_days_left(user: User) -> int:
+    """Days left in the trial rounded up, or 0 once it is over."""
+    remaining = trial_expires_at(user) - _utc_now()
+    if remaining <= datetime.timedelta(0):
+        return 0
+    return remaining.days + 1
 
-    days_left = 7 - delta.days
-    if days_left <= 0:
-        days_left = 1
-    return False, days_left
+
+def has_full_access(user: User) -> bool:
+    """Trial week and paid subscription both unlock every feature."""
+    return is_paid_user(user) or is_trial_active(user)
 
 
 def mark_analysis_started(user: User) -> None:
